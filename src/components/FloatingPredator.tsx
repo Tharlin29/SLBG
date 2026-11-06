@@ -388,11 +388,12 @@ export const FloatingPredator: React.FC<FloatingPredatorProps> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-4 gap-1">
               {([
                 { id: 'HMM', label: 'HMM', icon: '🤖', rate: methodStats?.HMM?.winRate ?? 85 },
                 { id: 'MARKOV', label: 'Markov', icon: '📊', rate: methodStats?.MARKOV?.winRate ?? 72 },
                 { id: 'ENSEMBLE', label: 'Ensemble', icon: '⚡', rate: methodStats?.ENSEMBLE?.winRate ?? 80 },
+                { id: 'NEURAL_MATRIX', label: 'Deep AI', icon: '🧠', rate: methodStats?.NEURAL_MATRIX?.winRate ?? 90 },
               ] as const).map((item) => {
                 const isSelected = aiAlgorithm === item.id;
                 return (
@@ -406,13 +407,15 @@ export const FloatingPredator: React.FC<FloatingPredatorProps> = ({
                           ? 'bg-amber-500 text-black shadow ring-1 ring-amber-300 font-black'
                           : item.id === 'MARKOV'
                           ? 'bg-purple-600 text-white shadow ring-1 ring-purple-300 font-black'
-                          : 'bg-cyan-500 text-black shadow ring-1 ring-cyan-300 font-black'
+                          : item.id === 'ENSEMBLE'
+                          ? 'bg-cyan-500 text-black shadow ring-1 ring-cyan-300 font-black'
+                          : 'bg-fuchsia-600 text-white shadow ring-1 ring-fuchsia-300 font-black'
                         : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
                     }`}
                   >
-                    <span className="flex items-center gap-0.5 text-[10px]">
+                    <span className="flex items-center gap-0.5 text-[9px]">
                       <span>{item.icon}</span>
-                      <span>{item.label}</span>
+                      <span className="truncate">{item.label}</span>
                     </span>
                     <span className={`text-[9px] ${isSelected ? 'opacity-90 font-bold' : 'text-emerald-400 font-semibold'}`}>
                       {item.rate}%

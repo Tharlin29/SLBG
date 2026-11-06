@@ -216,13 +216,13 @@ export default function App() {
             lastDrawnPeriodRef.current = latestCompleted.period;
           }
 
-          // Generate predictions for the CURRENT ACTIVE period for all 3 algorithms concurrently
+          // Generate predictions for the CURRENT ACTIVE period for all 4 algorithms concurrently
           if (activePeriod && activePeriod !== lastPredictedPeriodRef.current) {
             const allPreds = calculateAllPredictions(freshHistory, activePeriod, sensitivity);
             setMethodPredictions(allPreds);
             activeMethodPredictionsRef.current = { targetPeriod: activePeriod, predictions: allPreds };
 
-            const currentSelected = allPreds[aiAlgorithmRef.current] || allPreds['HMM'];
+            const currentSelected = allPreds[aiAlgorithmRef.current] || allPreds['NEURAL_MATRIX'] || allPreds['HMM'];
             setPrediction(currentSelected);
             lastPredictedPeriodRef.current = activePeriod;
             if (soundEnabledRef.current) playRadarLockSound();

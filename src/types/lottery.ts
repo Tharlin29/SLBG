@@ -13,7 +13,7 @@ export interface WingoDraw {
   premium?: string;
 }
 
-export type AlgorithmType = 'HMM' | 'MARKOV' | 'ENSEMBLE';
+export type AlgorithmType = 'HMM' | 'MARKOV' | 'ENSEMBLE' | 'NEURAL_MATRIX';
 
 export interface MethodPerformanceStats {
   algorithm: AlgorithmType;
