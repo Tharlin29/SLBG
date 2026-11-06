@@ -215,12 +215,17 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
 
   const [stopReason, setStopReason] = useState<'WIN_STOP' | 'LOSE_STOP' | 'INSUFFICIENT_BALANCE' | null>(null);
 
+  // Nan Stop Auto Bet (1m 35s Auto Restart after Win Profit)
+  const [nonStopAutoBet, setNonStopAutoBet] = useState<boolean>(false);
+  const [nonStopCountdown, setNonStopCountdown] = useState<number | null>(null);
+
   // Modal Dialog states for Settings & Risk Management
   const [isBetSettingsModalOpen, setIsBetSettingsModalOpen] = useState<boolean>(false);
   const [isRiskModalOpen, setIsRiskModalOpen] = useState<boolean>(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
   // Synchronous refs
+  const nonStopAutoBetRef = useRef(nonStopAutoBet);
   const winStopEnabledRef = useRef(winStopEnabled);
   const winStopAmountRef = useRef(winStopAmount);
   const loseStopEnabledRef = useRef(loseStopEnabled);
@@ -251,6 +256,10 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
     botStartTimeRef.current = botStartTime;
   }, [winStopEnabled, winStopAmount, loseStopEnabled, loseStopAmount, autoBaseAmount, autoMultiplierMode, consecutiveLosses, autoStrategy, waitStreakThreshold, waitBotStatus, waitBotTarget, botStartTime]);
 
+  useEffect(() => {
+    nonStopAutoBetRef.current = nonStopAutoBet;
+  }, [nonStopAutoBet]);
+
   // Synchronize state with parent
   useEffect(() => {
     onAutoBetActiveChange?.(isAutoBetActive);
@@ -271,9 +280,11 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
       autoStrategy,
       startTime: botStartTime,
       elapsedSeconds: botElapsedSeconds,
-      targetReachedDuration: targetProfitDuration
+      targetReachedDuration: targetProfitDuration,
+      nonStopAutoBet,
+      nonStopCountdown
     });
-  }, [isAutoBetActive, autoProfit, autoWins, autoLosses, currentAutoStake, autoBaseAmount, consecutiveLosses, autoMultiplierMode, winStopEnabled, winStopAmount, loseStopEnabled, loseStopAmount, stopReason, autoStrategy, botStartTime, botElapsedSeconds, targetProfitDuration]);
+  }, [isAutoBetActive, autoProfit, autoWins, autoLosses, currentAutoStake, autoBaseAmount, consecutiveLosses, autoMultiplierMode, winStopEnabled, winStopAmount, loseStopEnabled, loseStopAmount, stopReason, autoStrategy, botStartTime, botElapsedSeconds, targetProfitDuration, nonStopAutoBet, nonStopCountdown]);
 
   // Live timer tick for Auto Bot
   useEffect(() => {
@@ -287,6 +298,30 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
       if (timer) clearInterval(timer);
     };
   }, [isAutoBetActive, botStartTime, stopReason]);
+
+  // Nan Stop Auto Bet countdown tick: 1 minute and 35 seconds (95 seconds)
+  useEffect(() => {
+    let timer: any = null;
+    if (nonStopAutoBet && stopReason === 'WIN_STOP' && nonStopCountdown !== null && nonStopCountdown > 0) {
+      timer = setInterval(() => {
+        setNonStopCountdown((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(timer);
+            setTimeout(() => {
+              handleRestartAutoBot();
+              setAutoFeedback('⚡ [Nan Stop Auto Bet] 1 မိနစ် 35 စက္ကန့်ပြည့်ပါသဖြင့် Auto Bet စနစ် အလိုအလျောက် ပြန်လည်စတင်လိုက်ပါပြီ!');
+            }, 0);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [nonStopAutoBet, stopReason, nonStopCountdown]);
 
   // Recalculate current auto stake when base amount or multiplier changes
   useEffect(() => {
@@ -314,6 +349,7 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
     setBotStartTime(null);
     setBotElapsedSeconds(0);
     setTargetProfitDuration(null);
+    setNonStopCountdown(null);
     setAutoFeedback('Auto Bot စာရင်းနှင့် Timer ကို အသစ်ပြန်လည်စတင်လိုက်ပါပြီ။');
   };
 
@@ -324,6 +360,7 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
     setConsecutiveLosses(0);
     setCurrentAutoStake(autoBaseAmount);
     setStopReason(null);
+    setNonStopCountdown(null);
     setWaitBotStatus('WAITING');
     waitBotStatusRef.current = 'WAITING';
     setWaitBotTarget(null);
@@ -358,6 +395,7 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
       }
 
       setStopReason(null);
+      setNonStopCountdown(null);
       setIsAutoBetActive(true);
       const now = Date.now();
       setBotStartTime(now);
@@ -372,6 +410,7 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
       setAutoFeedback(`⚡ Auto Bet စတင်ဖွင့်လှစ်လိုက်ပါပြီ! စတင်ငွေ K ${autoBaseAmount.toLocaleString()} MMK၊ ${autoMultiplierMode}× ဆတိုး၊ Target Profit Timer စတင်ရေတွက်ပါပြီ။`);
     } else {
       setIsAutoBetActive(false);
+      setNonStopCountdown(null);
       setAutoFeedback('Auto Bet ကို ခေတ္တရပ်တန့်လိုက်ပါပြီ။');
     }
   };
@@ -550,7 +589,13 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
 
                     // Voice announcement: "ဂုဏ်ယူပါတယ် မင်းသတ်မှတ်ထားသောအမြတ်ငွေကိုရရှိပါပြီ"
                     playMyanmarTargetProfitVoice();
-                    setAutoFeedback(`🏆 [TARGET PROFIT ပြည့်မီပါပြီ!] သတ်မှတ်အနိုင်ငွေ (+K ${newProfit.toLocaleString()} MMK / Target: K ${winStopAmountRef.current.toLocaleString()}) ရရှိပါပြီ! ကြာချိန်: ${formatDuration(durationSecs)}`);
+
+                    if (nonStopAutoBetRef.current) {
+                      setNonStopCountdown(95); // 1 minute 35 seconds = 95 seconds
+                      setAutoFeedback(`🏆 [TARGET PROFIT ပြည့်မီပါပြီ!] သတ်မှတ်အနိုင်ငွေ (+K ${newProfit.toLocaleString()} MMK) ရရှိပါပြီ! ကြာချိန်: ${formatDuration(durationSecs)} • Nan Stop Auto Bet ဖွင့်ထားသဖြင့် 1 မိနစ် 35 စက္ကန့်အကြာတွင် အလိုအလျောက် ပြန်လည်စတင်ပါမည် (01:35)...`);
+                    } else {
+                      setAutoFeedback(`🏆 [TARGET PROFIT ပြည့်မီပါပြီ!] သတ်မှတ်အနိုင်ငွေ (+K ${newProfit.toLocaleString()} MMK / Target: K ${winStopAmountRef.current.toLocaleString()}) ရရှိပါပြီ! ကြာချိန်: ${formatDuration(durationSecs)}`);
+                    }
                     confetti({
                       particleCount: 140,
                       spread: 90,
@@ -1004,42 +1049,88 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
 
         {/* WIN STOP ACHIEVED SPECIAL BANNER */}
         {stopReason === 'WIN_STOP' && (
-          <div className="mt-3.5 p-4 rounded-xl bg-gradient-to-r from-emerald-950 via-slate-900 to-amber-950 border-2 border-emerald-400 text-emerald-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_0_25px_rgba(16,185,129,0.35)] relative z-10 animate-in fade-in">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shrink-0">
-                <Trophy className="w-7 h-7 text-amber-300 animate-bounce" />
+          <div className="mt-3.5 p-4 rounded-xl bg-gradient-to-r from-emerald-950 via-slate-900 to-amber-950 border-2 border-emerald-400 text-emerald-300 text-xs flex flex-col gap-3 shadow-[0_0_25px_rgba(16,185,129,0.35)] relative z-10 animate-in fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shrink-0">
+                  <Trophy className="w-7 h-7 text-amber-300 animate-bounce" />
+                </div>
+                <div>
+                  <strong className="text-sm font-bold text-white block">
+                    🎉 TARGET PROFIT ရရှိပါပြီ! (Win Stop Achieved)
+                  </strong>
+                  <p className="text-xs text-emerald-200 mt-0.5">
+                    သတ်မှတ်ထားသောအမြတ်ငွေ <strong>+K {autoProfit.toLocaleString()} MMK</strong> ရရှိခဲ့ပါပြီ! 
+                    ကြာချိန်: <strong className="text-amber-300 font-mono text-sm">{formatDuration(targetProfitDuration || botElapsedSeconds)}</strong>
+                  </p>
+                  <p className="text-[11px] text-amber-300/90 italic mt-0.5">
+                    "ဂုဏ်ယူပါတယ် မင်းသတ်မှတ်ထားသောအမြတ်ငွေကိုရရှိပါပြီ"
+                  </p>
+                </div>
               </div>
-              <div>
-                <strong className="text-sm font-bold text-white block">
-                  🎉 TARGET PROFIT ရရှိပါပြီ! (Win Stop Achieved)
-                </strong>
-                <p className="text-xs text-emerald-200 mt-0.5">
-                  သတ်မှတ်ထားသောအမြတ်ငွေ <strong>+K {autoProfit.toLocaleString()} MMK</strong> ရရှိခဲ့ပါပြီ! 
-                  ကြာချိန်: <strong className="text-amber-300 font-mono text-sm">{formatDuration(targetProfitDuration || botElapsedSeconds)}</strong>
-                </p>
-                <p className="text-[11px] text-amber-300/90 italic mt-0.5">
-                  "ဂုဏ်ယူပါတယ် မင်းသတ်မှတ်ထားသောအမြတ်ငွေကိုရရှိပါပြီ"
-                </p>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleRestartAutoBot}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-amber-400 text-black font-black text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Session အသစ်စမည်</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetAutoSession}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700"
+                >
+                  Reset
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleRestartAutoBot}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-amber-400 text-black font-black text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Session အသစ်စမည်</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleResetAutoSession}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700"
-              >
-                Reset
-              </button>
-            </div>
+            {/* Nan Stop Auto Bet Countdown Strip if enabled */}
+            {nonStopAutoBet && nonStopCountdown !== null && (
+              <div className="pt-2.5 border-t border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-black/40 p-2.5 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-400 animate-spin" style={{ animationDuration: '4s' }} />
+                  <div>
+                    <span className="font-tech text-xs font-bold text-amber-300 block">
+                      ⚡ Nan Stop Auto Bet Activated:
+                    </span>
+                    <span className="text-[11px] text-emerald-200">
+                      နောက်တစ်ကျော့ Auto Bet အလိုအလျောက် စတင်ရန်{' '}
+                      <strong className="text-white font-mono text-sm font-black px-1.5 py-0.5 rounded bg-black border border-amber-500/40">
+                        {Math.floor(nonStopCountdown / 60).toString().padStart(2, '0')}:{(nonStopCountdown % 60).toString().padStart(2, '0')}
+                      </strong>{' '}
+                      ကျန်ရှိပါသည် (1m 35s Auto Restart)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNonStopCountdown(null);
+                      handleRestartAutoBot();
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-mono font-bold text-xs shadow active:scale-95"
+                  >
+                    ချက်ချင်းစတင်မည် (Start Now)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNonStopCountdown(null);
+                      setAutoFeedback('Nan Stop Auto Bet အလိုအလျောက် စတင်ခြင်းကို ပယ်ဖျက်လိုက်ပါပြီ။');
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700"
+                  >
+                    ပယ်ဖျက်မည်
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1118,6 +1209,69 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
               <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
               <span>Reset စာရင်း</span>
             </button>
+          </div>
+        </div>
+
+        {/* NAN STOP AUTO BET ON/OFF CONTROL BAR (Under Win/Lose Stop button) */}
+        <div className="mt-3.5 p-3 sm:p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10 shadow-md">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-xl border transition-all ${
+              nonStopAutoBet
+                ? 'bg-amber-500/20 border-amber-500/40 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
+                : 'bg-slate-900 border-slate-800 text-slate-500'
+            }`}>
+              <Zap className={`w-4 h-4 ${nonStopAutoBet ? 'animate-bounce text-amber-400 fill-amber-400' : ''}`} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-tech text-xs sm:text-sm font-bold text-white tracking-wider">
+                  Nan Stop Auto Bet
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                  nonStopAutoBet
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                    : 'bg-slate-900 border-slate-800 text-slate-500'
+                }`}>
+                  {nonStopAutoBet ? 'ACTIVATED (ON)' : 'OFF'}
+                </span>
+                {nonStopAutoBet && nonStopCountdown !== null && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/50 text-amber-300 text-[10px] font-mono font-bold animate-pulse flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Auto-Start: {Math.floor(nonStopCountdown / 60).toString().padStart(2, '0')}:{(nonStopCountdown % 60).toString().padStart(2, '0')}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Win Profit ရရှိပြီး Auto Bet ရပ်တန့်သွားပါက <strong className="text-amber-300 font-mono">1 minute and 35 second (95s)</strong> အကြာတွင် auto bet စနစ် အလိုအလျောက် Auto start ဖြစ်စေပါမည်။
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const nextVal = !nonStopAutoBet;
+                setNonStopAutoBet(nextVal);
+                nonStopAutoBetRef.current = nextVal;
+                if (!nextVal) {
+                  setNonStopCountdown(null);
+                }
+              }}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${
+                nonStopAutoBet ? 'bg-amber-500' : 'bg-slate-800'
+              }`}
+              title="Toggle Nan Stop Auto Bet"
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                  nonStopAutoBet ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className={`text-xs font-mono font-bold ${nonStopAutoBet ? 'text-amber-400' : 'text-slate-500'}`}>
+              {nonStopAutoBet ? 'ON' : 'OFF'}
+            </span>
           </div>
         </div>
       </div>
@@ -1572,6 +1726,33 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Nan Stop Auto Bet Setting in Risk Modal */}
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-amber-500/30 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-amber-300 flex items-center gap-1.5">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    NAN STOP AUTO BET (1m 35s Auto Restart)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextVal = !nonStopAutoBet;
+                      setNonStopAutoBet(nextVal);
+                      nonStopAutoBetRef.current = nextVal;
+                      if (!nextVal) setNonStopCountdown(null);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold ${
+                      nonStopAutoBet ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {nonStopAutoBet ? 'ENABLED' : 'DISABLED'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  အကယ်၍ ဖွင့်ထားပါက Win Profit ရရှိပြီး Auto bet ရပ်တန့်သွားပြီးနောက် <strong className="text-amber-300 font-mono">1 minute and 35 seconds (95s)</strong> အကြာတွင် Auto Bet စနစ် အလိုအလျောက် Auto Start ပြန်လည်ဖြစ်စေပါမည်။
+                </p>
               </div>
             </div>
 

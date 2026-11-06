@@ -111,4 +111,6 @@ export interface AutoMonitoringState {
   startTime: number | null;
   elapsedSeconds: number;
   targetReachedDuration: number | null; // Exact seconds taken to achieve target profit
+  nonStopAutoBet?: boolean;
+  nonStopCountdown?: number | null;
 }
