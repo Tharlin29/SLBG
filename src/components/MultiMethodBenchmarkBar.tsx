@@ -10,6 +10,8 @@ import {
   Cpu, 
   Layers, 
   Brain,
+  Binary,
+  BarChart3,
   ArrowRight, 
   Bell, 
   X, 
@@ -21,7 +23,7 @@ import {
   ChevronUp, 
   Activity 
 } from 'lucide-react';
-import { AlgorithmType, AllMethodsStats, AutoSwitchEvent, PredictionResult } from '../types/lottery';
+import { AlgorithmType, AllMethodsStats, AutoSwitchEvent, PredictionResult, BettingEngineMode } from '../types/lottery';
 
 interface MultiMethodBenchmarkBarProps {
   stats: AllMethodsStats;
@@ -34,6 +36,7 @@ interface MultiMethodBenchmarkBarProps {
   predictions?: Record<AlgorithmType, PredictionResult> | null;
   nextPeriod?: string;
   isUserPlaying?: boolean;
+  bettingEngineMode?: BettingEngineMode;
 }
 
 export const MultiMethodBenchmarkBar: React.FC<MultiMethodBenchmarkBarProps> = ({
@@ -47,9 +50,10 @@ export const MultiMethodBenchmarkBar: React.FC<MultiMethodBenchmarkBarProps> = (
   predictions,
   nextPeriod,
   isUserPlaying = false,
+  bettingEngineMode = 'METHODS_7_MODE',
 }) => {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const algorithms: AlgorithmType[] = ['HMM', 'MARKOV', 'ENSEMBLE', 'NEURAL_MATRIX'];
+  const algorithms: AlgorithmType[] = ['META_SUPER_AI', 'NEURAL_MATRIX', 'NGRAM_SEQUENCE', 'STATISTICAL_PROB', 'ENSEMBLE', 'HMM', 'MARKOV'];
 
   // Identify highest win rate algorithm
   const ranked = [...algorithms].sort((a, b) => {
@@ -62,6 +66,17 @@ export const MultiMethodBenchmarkBar: React.FC<MultiMethodBenchmarkBarProps> = (
 
   const getMethodTheme = (algo: AlgorithmType) => {
     switch (algo) {
+      case 'META_SUPER_AI':
+        return {
+          name: 'Meta-Consensus AI',
+          tagline: 'နည်းပညာ ၆ မျိုးပေါင်းစပ် Consensus (Ultimate AI)',
+          accentColor: 'amber',
+          borderActive: 'border-amber-400 ring-2 ring-amber-400/60 shadow-[0_0_20px_rgba(245,158,11,0.4)]',
+          badgeBg: 'bg-gradient-to-r from-amber-500/30 to-yellow-500/30 text-amber-300 border-amber-400/60',
+          gradient: 'from-amber-500/20 via-amber-950/40 to-slate-900',
+          barGradient: 'from-amber-400 via-yellow-400 to-amber-300',
+          icon: Crown,
+        };
       case 'HMM':
         return {
           name: 'HMM Model (v3.0)',
@@ -105,6 +120,28 @@ export const MultiMethodBenchmarkBar: React.FC<MultiMethodBenchmarkBarProps> = (
           gradient: 'from-fuchsia-500/10 via-purple-950/20 to-slate-900',
           barGradient: 'from-fuchsia-500 to-pink-400',
           icon: Brain,
+        };
+      case 'NGRAM_SEQUENCE':
+        return {
+          name: '3-Gram / N-Gram',
+          tagline: 'Sequence & Pattern Recognition (3-gram / N-gram)',
+          accentColor: 'emerald',
+          borderActive: 'border-emerald-400 ring-2 ring-emerald-400/50',
+          badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+          gradient: 'from-emerald-500/10 via-teal-950/20 to-slate-900',
+          barGradient: 'from-emerald-500 to-teal-300',
+          icon: Binary,
+        };
+      case 'STATISTICAL_PROB':
+        return {
+          name: 'Statistical & Prob',
+          tagline: 'Statistical & Probability Methods (Z-Score & Bayesian)',
+          accentColor: 'blue',
+          borderActive: 'border-blue-400 ring-2 ring-blue-400/50',
+          badgeBg: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+          gradient: 'from-blue-500/10 via-indigo-950/20 to-slate-900',
+          barGradient: 'from-blue-500 to-indigo-300',
+          icon: BarChart3,
         };
     }
   };
@@ -168,6 +205,17 @@ export const MultiMethodBenchmarkBar: React.FC<MultiMethodBenchmarkBarProps> = (
               <span className="text-[10px] text-emerald-400 font-bold">({currentWinRate}% Win)</span>
             </div>
 
+            {bettingEngineMode === 'METHODS_7_MODE' ? (
+              <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                7-METHOD MODE ACTIVE
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                30-MIN FORMULA ACTIVE
+              </span>
+            )}
+
             {leaderAlgo && (
               <div className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-mono text-amber-300">
                 <Crown className="w-3 h-3 text-amber-400" />
@@ -229,7 +277,7 @@ export const MultiMethodBenchmarkBar: React.FC<MultiMethodBenchmarkBarProps> = (
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                User ကစားသည်ဖြစ်စေ၊ မကစားသည်ဖြစ်စေ HMM, Markov, Ensemble နှင့် Deep Pattern AI နည်းပညာ (၄) မျိုးလုံးကို နောက်ကွယ်တွင် တပြိုင်နက် Live Run ထားပြီး စွမ်းဆောင်ရည် အကောင်းဆုံးသို့ အလိုအလျောက် ရွေးချယ်ပေးပါသည်
+                User ကစားသည်ဖြစ်စေ၊ မကစားသည်ဖြစ်စေ Meta-Consensus AI, HMM, Markov, Ensemble, Deep Pattern AI, Sequence & Pattern Recognition (3-Gram / N-Gram) နှင့် Statistical & Probability Methods နည်းပညာ (၇) မျိုးလုံးကို နောက်ကွယ်တွင် တပြိုင်နက် Live Run ထားပြီး စွမ်းဆောင်ရည် အကောင်းဆုံးသို့ အလိုအလျောက် ရွေးချယ်ပေးပါသည်
               </p>
             </div>
 
@@ -258,8 +306,8 @@ export const MultiMethodBenchmarkBar: React.FC<MultiMethodBenchmarkBarProps> = (
             </div>
           </div>
 
-          {/* 4 METHOD COMPARATIVE PERFORMANCE CARDS GRID */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* 7 METHOD COMPARATIVE PERFORMANCE CARDS GRID */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-3">
             {algorithms.map((algo) => {
               const mStats = stats[algo];
               const theme = getMethodTheme(algo);

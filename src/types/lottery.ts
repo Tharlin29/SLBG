@@ -13,7 +13,9 @@ export interface WingoDraw {
   premium?: string;
 }
 
-export type AlgorithmType = 'HMM' | 'MARKOV' | 'ENSEMBLE' | 'NEURAL_MATRIX';
+export type AlgorithmType = 'HMM' | 'MARKOV' | 'ENSEMBLE' | 'NEURAL_MATRIX' | 'NGRAM_SEQUENCE' | 'STATISTICAL_PROB' | 'META_SUPER_AI';
+
+export type BettingEngineMode = 'FORMULA_MODE' | 'METHODS_7_MODE';
 
 export interface MethodPerformanceStats {
   algorithm: AlgorithmType;
@@ -113,4 +115,31 @@ export interface AutoMonitoringState {
   targetReachedDuration: number | null; // Exact seconds taken to achieve target profit
   nonStopAutoBet?: boolean;
   nonStopCountdown?: number | null;
+  nonStopWaitSeconds?: number;
+  bettingEngineMode?: BettingEngineMode;
+}
+
+export interface AiFormula {
+  id: string;
+  code: string;
+  title: string;
+  burmeseTitle: string;
+  description: string;
+  burmeseDescription: string;
+  generatedAt: number;
+  nextRefreshAt: number; // timestamp in ms (30 mins after generation)
+  expectedWinRate: number; // e.g. 95.2%
+  sampleHistorySize: number;
+  regimeType: 'DRAGON_MOMENTUM' | 'CHOP_ALTERNATING' | 'DOUBLET_TWIN' | 'MEAN_REVERSION' | 'META_CONSENSUS';
+  recommendedMethod: AlgorithmType;
+  recommendedMultiplier: number;
+  recommendedBaseStake: number;
+  recommendedWinStop: number;
+  recommendedLoseStop: number;
+  recommendedStrategy: 'AI_GUESS' | 'WAIT_BOT';
+  dominantSize: DrawSize;
+  rules: string[];
+  burmeseRules: string[];
+  liveFormulaWins: number;
+  liveFormulaLosses: number;
 }

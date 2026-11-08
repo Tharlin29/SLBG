@@ -85,7 +85,7 @@ export const ShweLotteryStatus: React.FC<ShweLotteryStatusProps> = ({
               </span>
             </div>
             <div className="text-slate-400 flex items-center justify-between gap-3 text-[11px]">
-              <span>Ph: <strong className="text-white">{account.phone}</strong></span>
+              <span>Ph: <strong className="text-white">09××××××××</strong></span>
               <span className="text-slate-500">Pass: ••••••••</span>
             </div>
           </div>

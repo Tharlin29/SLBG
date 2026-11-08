@@ -34,10 +34,13 @@ import { WingoGameBoard } from './components/WingoGameBoard';
 import { AdminPanel } from './components/AdminPanel';
 import { ShweLotteryStatus } from './components/ShweLotteryStatus';
 import { UserCoinModal } from './components/UserCoinModal';
-import { WingoDraw, PredictionResult, ShweAccount, UserAccessState, AlgorithmType, AllMethodsStats, AutoSwitchEvent } from './types/lottery';
+import { WingoDraw, PredictionResult, ShweAccount, UserAccessState, AlgorithmType, AllMethodsStats, AutoSwitchEvent, AiFormula, BettingEngineMode } from './types/lottery';
 import { calculateAutoGuess, calculateAllPredictions, calculateInitialMethodStats, updateMethodStatsWithResult, evaluateAutoSwitch } from './utils/predictionEngine';
 import { playWinSound, playYouWinVoice, playRadarLockSound, playTickSound, playAdminUnlockedSound } from './utils/audio';
 import { MultiMethodBenchmarkBar } from './components/MultiMethodBenchmarkBar';
+import { AiFormulaPanel } from './components/AiFormulaPanel';
+import { AiModeSwitcherBar } from './components/AiModeSwitcherBar';
+import { generateAiFormulaFromHistory, isFormulaExpired } from './utils/aiFormulaEngine';
 
 export default function App() {
   // Navigation tabs: 'PLAY' (Default playable console), 'WEBVIEW' (shwelottery.net), 'HISTORY'
@@ -84,9 +87,9 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
   const [isRechargeOpen, setIsRechargeOpen] = useState<boolean>(false);
 
-  // AI Sensitivity setting & Model Selection (HMM as default premier method)
+  // AI Sensitivity setting & Model Selection (Meta-Consensus Super AI as default premier method)
   const [sensitivity, setSensitivity] = useState<'BALANCED' | 'AGGRESSIVE' | 'HIGH_CONFIDENCE'>('BALANCED');
-  const [aiAlgorithm, setAiAlgorithm] = useState<AlgorithmType>('HMM');
+  const [aiAlgorithm, setAiAlgorithm] = useState<AlgorithmType>('META_SUPER_AI');
 
   // Multi-Method Real-Time Benchmarking & Adaptive Auto-Switching States
   const [methodStats, setMethodStats] = useState<AllMethodsStats>(() => calculateInitialMethodStats([]));
@@ -95,6 +98,14 @@ export default function App() {
   const [autoSwitchEvent, setAutoSwitchEvent] = useState<AutoSwitchEvent | null>(null);
   const [isAutoBotActive, setIsAutoBotActive] = useState<boolean>(false);
   const [isPredatorVisible, setIsPredatorVisible] = useState<boolean>(true);
+
+  // AI 30-Minutes Formula Generator State (runs concurrently in background)
+  const [aiFormula, setAiFormula] = useState<AiFormula | null>(null);
+  const [pendingFormulaToApply, setPendingFormulaToApply] = useState<AiFormula | null>(null);
+  const aiFormulaRef = useRef<AiFormula | null>(null);
+
+  // Active Betting Engine Mode ('FORMULA_MODE' or 'METHODS_7_MODE')
+  const [bettingEngineMode, setBettingEngineMode] = useState<BettingEngineMode>('METHODS_7_MODE');
 
   // Tracking refs to accurately detect draw transitions
   const lastDrawnPeriodRef = useRef<string>('');
@@ -108,6 +119,7 @@ export default function App() {
     predictions: Record<AlgorithmType, PredictionResult>;
   } | null>(null);
   const bootstrappedHistoryRef = useRef<boolean>(false);
+  const userConsecutiveLossesRef = useRef<number>(0);
 
   // Copy helper state
   const [copiedLogin, setCopiedLogin] = useState(false);
@@ -128,6 +140,40 @@ export default function App() {
     soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
 
+  useEffect(() => {
+    aiFormulaRef.current = aiFormula;
+  }, [aiFormula]);
+
+  // Background 30-minute Formula cycle runner (runs concurrently whether user plays or not)
+  useEffect(() => {
+    const formulaInterval = setInterval(() => {
+      if (history && history.length > 0) {
+        if (!aiFormulaRef.current || isFormulaExpired(aiFormulaRef.current)) {
+          const freshFormula = generateAiFormulaFromHistory(history, aiFormulaRef.current);
+          setAiFormula(freshFormula);
+          aiFormulaRef.current = freshFormula;
+        }
+      }
+    }, 10000);
+
+    return () => clearInterval(formulaInterval);
+  }, [history]);
+
+  const handleApplyAiFormula = (formula: AiFormula) => {
+    setBettingEngineMode('FORMULA_MODE');
+    setAiAlgorithm(formula.recommendedMethod);
+    aiAlgorithmRef.current = formula.recommendedMethod;
+    setPendingFormulaToApply({ ...formula });
+  };
+
+  const handleRefreshAiFormula = () => {
+    if (history && history.length > 0) {
+      const freshFormula = generateAiFormulaFromHistory(history, aiFormulaRef.current);
+      setAiFormula(freshFormula);
+      aiFormulaRef.current = freshFormula;
+    }
+  };
+
   // Main Data Fetcher function
   const fetchWingoData = async (typeIdToFetch = selectedTypeId) => {
     try {
@@ -143,6 +189,13 @@ export default function App() {
             bootstrappedHistoryRef.current = true;
             const initialBacktested = calculateInitialMethodStats(freshHistory, sensitivity);
             setMethodStats(initialBacktested);
+          }
+
+          // Bootstrap or refresh 30-minute AI Formula based on recent history
+          if (!aiFormulaRef.current || isFormulaExpired(aiFormulaRef.current)) {
+            const initialFormula = generateAiFormulaFromHistory(freshHistory, aiFormulaRef.current);
+            setAiFormula(initialFormula);
+            aiFormulaRef.current = initialFormula;
           }
 
           // The active period currently open on shwelottery.net
@@ -172,7 +225,7 @@ export default function App() {
 
               // 2. Evaluate Dynamic AI Smart Auto-Switch (User lose % များနေလျှင် Win % အမြင့်ဆုံးသို့ AI မှ Auto change လုပ်ပေးခြင်း)
               if (isAutoSwitchEnabledRef.current) {
-                const switchResult = evaluateAutoSwitch(aiAlgorithmRef.current, updated, true);
+                const switchResult = evaluateAutoSwitch(aiAlgorithmRef.current, updated, true, userConsecutiveLossesRef.current);
                 if (switchResult.shouldSwitch) {
                   const prevAlgo = aiAlgorithmRef.current;
                   setAiAlgorithm(switchResult.bestAlgo);
@@ -216,13 +269,13 @@ export default function App() {
             lastDrawnPeriodRef.current = latestCompleted.period;
           }
 
-          // Generate predictions for the CURRENT ACTIVE period for all 4 algorithms concurrently
+          // Generate predictions for the CURRENT ACTIVE period for all 7 algorithms concurrently (Meta Super AI, HMM, Markov, Ensemble, Neural Matrix, N-Gram Sequence, Statistical Probability)
           if (activePeriod && activePeriod !== lastPredictedPeriodRef.current) {
             const allPreds = calculateAllPredictions(freshHistory, activePeriod, sensitivity);
             setMethodPredictions(allPreds);
             activeMethodPredictionsRef.current = { targetPeriod: activePeriod, predictions: allPreds };
 
-            const currentSelected = allPreds[aiAlgorithmRef.current] || allPreds['NEURAL_MATRIX'] || allPreds['HMM'];
+            const currentSelected = allPreds[aiAlgorithmRef.current] || allPreds['META_SUPER_AI'] || allPreds['NEURAL_MATRIX'] || allPreds['HMM'];
             setPrediction(currentSelected);
             lastPredictedPeriodRef.current = activePeriod;
             if (soundEnabledRef.current) playRadarLockSound();
@@ -414,6 +467,7 @@ export default function App() {
           selectedTypeId={selectedTypeId}
           onChangeTypeId={(id) => setSelectedTypeId(id)}
           lastDrawnItem={history[0] || null}
+          history={history}
           userAccess={userAccess}
           soundEnabled={soundEnabled}
           onToggleSound={() => setSoundEnabled(!soundEnabled)}
@@ -425,9 +479,14 @@ export default function App() {
           aiAlgorithm={aiAlgorithm}
           onChangeAiAlgorithm={setAiAlgorithm}
           methodStats={methodStats}
+          methodPredictions={methodPredictions}
           isAutoSwitchEnabled={isAutoSwitchEnabled}
           onToggleAutoSwitch={() => setIsAutoSwitchEnabled(!isAutoSwitchEnabled)}
           autoSwitchEvent={autoSwitchEvent}
+          activeFormula={aiFormula}
+          onApplyFormula={handleApplyAiFormula}
+          bettingEngineMode={bettingEngineMode}
+          onSelectMode={setBettingEngineMode}
           onClose={() => setIsPredatorVisible(false)}
         />
       )}
@@ -566,11 +625,40 @@ export default function App() {
           />
         )}
 
+        {/* DUAL-MODE BETTING ENGINE SELECTOR & LIVE STATUS BAR */}
+        <AiModeSwitcherBar
+          currentMode={bettingEngineMode}
+          onSelectMode={setBettingEngineMode}
+          activeFormula={aiFormula}
+          currentAlgorithm={aiAlgorithm}
+          methodStats={methodStats}
+          isAutoBetActive={isAutoBotActive}
+          onApplyFormula={handleApplyAiFormula}
+          onSelectAlgorithm={(algo) => {
+            setBettingEngineMode('METHODS_7_MODE');
+            setAiAlgorithm(algo);
+          }}
+        />
+
+        {/* AI HISTORY SEARCH & 30-MINUTES FORMULA ENGINE (BACKGROUND LIVE RUNNING) */}
+        <AiFormulaPanel
+          formula={aiFormula}
+          onRefreshFormula={handleRefreshAiFormula}
+          onApplyFormula={handleApplyAiFormula}
+          isAutoBetActive={isAutoBotActive}
+          currentAlgorithm={aiAlgorithm}
+          historyCount={history.length}
+          bettingEngineMode={bettingEngineMode}
+        />
+
         {/* REAL-TIME MULTI-METHOD BENCHMARK & ADAPTIVE AUTO-SWITCH (Medium button size) */}
         <MultiMethodBenchmarkBar
           stats={methodStats}
           currentAlgorithm={aiAlgorithm}
-          onSelectAlgorithm={setAiAlgorithm}
+          onSelectAlgorithm={(algo) => {
+            setBettingEngineMode('METHODS_7_MODE');
+            setAiAlgorithm(algo);
+          }}
           isAutoSwitchEnabled={isAutoSwitchEnabled}
           onToggleAutoSwitch={() => setIsAutoSwitchEnabled(!isAutoSwitchEnabled)}
           autoSwitchEvent={autoSwitchEvent}
@@ -578,6 +666,7 @@ export default function App() {
           predictions={methodPredictions}
           nextPeriod={currentPeriod}
           isUserPlaying={activeTab === 'PLAY'}
+          bettingEngineMode={bettingEngineMode}
         />
 
         {/* TAB 1: INTERACTIVE PLAY STATION (USER CAN PLAY WHILE PREDATOR FLOATS) */}
@@ -594,13 +683,27 @@ export default function App() {
             onApplyAiGuess={handleApplyAiFromPredator}
             onRefreshLogin={handleRefreshLogin}
             aiAlgorithm={aiAlgorithm}
-            onChangeAiAlgorithm={setAiAlgorithm}
+            onChangeAiAlgorithm={(algo) => {
+              setBettingEngineMode('METHODS_7_MODE');
+              setAiAlgorithm(algo);
+            }}
             methodStats={methodStats}
             isAutoSwitchEnabled={isAutoSwitchEnabled}
             onToggleAutoSwitch={() => setIsAutoSwitchEnabled(!isAutoSwitchEnabled)}
             autoSwitchEvent={autoSwitchEvent}
             methodPredictions={methodPredictions}
-            onAutoBetActiveChange={setIsAutoBotActive}
+            activeFormula={aiFormula}
+            pendingFormula={pendingFormulaToApply}
+            onFormulaConsumed={() => setPendingFormulaToApply(null)}
+            onApplyFormula={handleApplyAiFormula}
+            bettingEngineMode={bettingEngineMode}
+            onSelectMode={setBettingEngineMode}
+            onAutoBetActiveChange={(active) => {
+              setIsAutoBotActive((prev) => (prev !== active ? active : prev));
+            }}
+            onAutoMonitoringChange={(state) => {
+              userConsecutiveLossesRef.current = state.consecutiveLosses;
+            }}
           />
         )}
 
@@ -624,7 +727,7 @@ export default function App() {
                   className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-200 border border-slate-700 flex items-center gap-1.5"
                 >
                   {copiedLogin ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedLogin ? 'Copied Login!' : 'Copy Login (9798023829)'}</span>
+                  <span>{copiedLogin ? 'Copied Login!' : 'Copy Login (09××××××××)'}</span>
                 </button>
 
                 <a
