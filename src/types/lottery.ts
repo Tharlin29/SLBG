@@ -142,4 +142,7 @@ export interface AiFormula {
   burmeseRules: string[];
   liveFormulaWins: number;
   liveFormulaLosses: number;
+  winStopEnabled?: boolean;
+  loseStopEnabled?: boolean;
+  isCustomized?: boolean;
 }

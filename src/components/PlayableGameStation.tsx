@@ -424,8 +424,14 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
     setAutoStrategy(targetFormula.recommendedStrategy);
     setWinStopAmount(targetFormula.recommendedWinStop);
     setWinStopInput(String(targetFormula.recommendedWinStop));
+    if (targetFormula.winStopEnabled !== undefined) {
+      setWinStopEnabled(targetFormula.winStopEnabled);
+    }
     setLoseStopAmount(targetFormula.recommendedLoseStop);
     setLoseStopInput(String(targetFormula.recommendedLoseStop));
+    if (targetFormula.loseStopEnabled !== undefined) {
+      setLoseStopEnabled(targetFormula.loseStopEnabled);
+    }
     onChangeAiAlgorithm?.(targetFormula.recommendedMethod);
     onSelectMode?.('FORMULA_MODE');
 
@@ -447,8 +453,11 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
       playRadarLockSound();
     } catch {}
 
+    const winTxt = targetFormula.winStopEnabled === false ? 'OFF' : `+K ${targetFormula.recommendedWinStop.toLocaleString()}`;
+    const loseTxt = targetFormula.loseStopEnabled === false ? 'OFF' : `-K ${targetFormula.recommendedLoseStop.toLocaleString()}`;
+
     setAutoFeedback(
-      `🎮 [AI FORMULA အတိုင်း ကစားခြင်း] ${targetFormula.burmeseTitle} စနစ်ဖြင့် ${targetFormula.recommendedMethod} (${targetFormula.recommendedMultiplier}× ဆတိုး) Auto Bot ချက်ချင်း စတင်လောင်းပါပြီ!`
+      `🎮 [30-MIN FORMULA အတိုင်း ကစားခြင်း] ${targetFormula.burmeseTitle} စနစ်ဖြင့် ${targetFormula.recommendedMethod} (စတင်ကြေး: K ${targetFormula.recommendedBaseStake.toLocaleString()} • ${targetFormula.recommendedMultiplier}× ဆတိုး • Win Stop: ${winTxt} • Lose Stop: ${loseTxt}) Auto Bot စတင်လောင်းပါပြီ!`
     );
   };
 
@@ -1034,7 +1043,7 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
 
               <span className="text-[11px] text-slate-300 font-sans block mt-1">
                 {bettingEngineMode === 'FORMULA_MODE'
-                  ? `Formula: ${activeFormula?.code || 'Active'} • ${activeFormula?.burmeseTitle || ''} • (${activeFormula?.recommendedMultiplier || 2}× Mult)`
+                  ? `Formula: ${activeFormula?.code || 'Active'} • ${activeFormula?.burmeseTitle || ''} • (Base: K ${autoBaseAmount.toLocaleString()} • Win Stop: ${winStopEnabled ? '+' + winStopAmount.toLocaleString() : 'OFF'} • Lose Stop: ${loseStopEnabled ? '-' + loseStopAmount.toLocaleString() : 'OFF'} • ${autoMultiplierMode}× Mult)`
                   : `Method: [${aiAlgorithm}] • တိုက်ရိုက်ရွေးချယ်ထားသော စနစ်ဖြင့် လောင်းနေပါသည် (၂ ကြိမ်ရှုံးလျှင် Auto-Switch)`}
               </span>
             </div>

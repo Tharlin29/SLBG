@@ -163,6 +163,8 @@ export default function App() {
     setBettingEngineMode('FORMULA_MODE');
     setAiAlgorithm(formula.recommendedMethod);
     aiAlgorithmRef.current = formula.recommendedMethod;
+    setAiFormula(formula);
+    aiFormulaRef.current = formula;
     setPendingFormulaToApply({ ...formula });
   };
 
