@@ -858,6 +858,39 @@ app.get('/api/audio/target-profit-burmese', async (_req: Request, res: Response)
   }
 });
 
+// 6. Voice Alarm: "I found 3 lose method"
+let cachedFound3LoseAudio: Buffer | null = null;
+app.get('/api/audio/found-3-lose-method', async (_req: Request, res: Response) => {
+  try {
+    if (cachedFound3LoseAudio) {
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(cachedFound3LoseAudio);
+    }
+
+    const text = encodeURIComponent('I found 3 lose method');
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${text}&tl=en&client=tw-ob`;
+    const response = await fetch(ttsUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    if (response.ok) {
+      const arrayBuffer = await response.arrayBuffer();
+      cachedFound3LoseAudio = Buffer.from(arrayBuffer);
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(cachedFound3LoseAudio);
+    } else {
+      res.status(502).json({ error: 'TTS source unavailable' });
+    }
+  } catch (err: any) {
+    console.error('Found 3 lose method TTS endpoint error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Start Express Server
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

@@ -15,7 +15,7 @@ export interface WingoDraw {
 
 export type AlgorithmType = 'HMM' | 'MARKOV' | 'ENSEMBLE' | 'NEURAL_MATRIX' | 'NGRAM_SEQUENCE' | 'STATISTICAL_PROB' | 'META_SUPER_AI';
 
-export type BettingEngineMode = 'FORMULA_MODE' | 'METHODS_7_MODE';
+export type BettingEngineMode = 'FORMULA_MODE' | 'METHODS_7_MODE' | 'SNIPER_6LOSS_MODE' | 'SNIPER_5LOSS_MODE';
 
 export interface MethodPerformanceStats {
   algorithm: AlgorithmType;
@@ -30,6 +30,17 @@ export interface MethodPerformanceStats {
 }
 
 export type AllMethodsStats = Record<AlgorithmType, MethodPerformanceStats>;
+
+export interface ScatterAlarmEvent {
+  algorithm: AlgorithmType;
+  label: string;
+  burmeseLabel: string;
+  consecutiveLosses: number; // 3, 4, 5, or 6+
+  period: string;
+  timestamp: number;
+  message: string;
+  level: 'FOUND_3_LOSS' | 'WARNING_4' | 'CRITICAL_5' | 'LOCKED_5' | 'LOCKED_6';
+}
 
 export interface AutoSwitchEvent {
   fromAlgo: AlgorithmType;
@@ -109,7 +120,7 @@ export interface AutoMonitoringState {
   loseStopEnabled: boolean;
   loseStopAmount: number;
   stopReason: 'WIN_STOP' | 'LOSE_STOP' | 'INSUFFICIENT_BALANCE' | null;
-  autoStrategy: 'AI_GUESS' | 'MANUAL_CHOICE' | 'WAIT_BOT';
+  autoStrategy: 'AI_GUESS' | 'MANUAL_CHOICE' | 'WAIT_BOT' | 'SNIPER_6LOSS' | 'SNIPER_5LOSS';
   startTime: number | null;
   elapsedSeconds: number;
   targetReachedDuration: number | null; // Exact seconds taken to achieve target profit
@@ -117,6 +128,8 @@ export interface AutoMonitoringState {
   nonStopCountdown?: number | null;
   nonStopWaitSeconds?: number;
   bettingEngineMode?: BettingEngineMode;
+  sniperStatus?: 'SCANNING_WAIT' | 'LOCKED_BETTING' | 'WON_RESET';
+  sniperLockedAlgo?: AlgorithmType | null;
 }
 
 export interface AiFormula {
@@ -127,7 +140,7 @@ export interface AiFormula {
   description: string;
   burmeseDescription: string;
   generatedAt: number;
-  nextRefreshAt: number; // timestamp in ms (30 mins after generation)
+  nextRefreshAt: number; // timestamp in ms (10 mins after generation)
   expectedWinRate: number; // e.g. 95.2%
   sampleHistorySize: number;
   regimeType: 'DRAGON_MOMENTUM' | 'CHOP_ALTERNATING' | 'DOUBLET_TWIN' | 'MEAN_REVERSION' | 'META_CONSENSUS';

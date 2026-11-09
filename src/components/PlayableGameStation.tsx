@@ -23,11 +23,13 @@ import {
   Activity,
   Settings,
   HelpCircle,
-  Cpu
+  Cpu,
+  Crosshair
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { WingoDraw, PredictionResult, ShweAccount, AlgorithmType, AllMethodsStats, AutoSwitchEvent, AutoMonitoringState, AiFormula, BettingEngineMode } from '../types/lottery';
-import { playWinSound, playYouWinVoice, playTickSound, playMyanmarTargetProfitVoice, playRadarLockSound } from '../utils/audio';
+import { playWinSound, playYouWinVoice, playTickSound, playMyanmarTargetProfitVoice, playRadarLockSound, playSniperStrikeSound } from '../utils/audio';
+import { evaluateAllMethodsLossStreaks } from '../utils/sniper6LossEngine';
 
 interface PlayableGameStationProps {
   currentPeriod: string;
@@ -197,7 +199,7 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
 
   const [consecutiveLosses, setConsecutiveLosses] = useState<number>(0);
   const [currentAutoStake, setCurrentAutoStake] = useState<number>(10);
-  const [autoStrategy, setAutoStrategy] = useState<'AI_GUESS' | 'WAIT_BOT'>('AI_GUESS');
+  const [autoStrategy, setAutoStrategy] = useState<'AI_GUESS' | 'WAIT_BOT' | 'SNIPER_6LOSS' | 'SNIPER_5LOSS'>('AI_GUESS');
   const [autoWins, setAutoWins] = useState<number>(0);
   const [autoLosses, setAutoLosses] = useState<number>(0);
   const [autoProfit, setAutoProfit] = useState<number>(0);
@@ -215,6 +217,10 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
   const [waitStreakThreshold, setWaitStreakThreshold] = useState<number>(5);
   const [waitBotStatus, setWaitBotStatus] = useState<'WAITING' | 'BETTING'>('WAITING');
   const [waitBotTarget, setWaitBotTarget] = useState<'BIG' | 'SMALL' | null>(null);
+
+  // 6-Loss Sniper Wait & Strike Bot Settings
+  const [sniperBotStatus, setSniperBotStatus] = useState<'WAITING' | 'STRIKING'>('WAITING');
+  const [sniperLockedAlgo, setSniperLockedAlgo] = useState<AlgorithmType | null>(null);
 
   // Win Stop & Lose Stop Configuration
   const [winStopEnabled, setWinStopEnabled] = useState<boolean>(true);
@@ -252,6 +258,8 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
   const waitStreakThresholdRef = useRef(waitStreakThreshold);
   const waitBotStatusRef = useRef(waitBotStatus);
   const waitBotTargetRef = useRef(waitBotTarget);
+  const sniperBotStatusRef = useRef<'WAITING' | 'STRIKING'>(sniperBotStatus);
+  const sniperLockedAlgoRef = useRef<AlgorithmType | null>(sniperLockedAlgo);
   const botStartTimeRef = useRef(botStartTime);
   const lastAutoBetPeriodRef = useRef<string>('');
   const prevHistoryPeriodRef = useRef<string>('');
@@ -282,8 +290,10 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
     waitStreakThresholdRef.current = waitStreakThreshold;
     waitBotStatusRef.current = waitBotStatus;
     waitBotTargetRef.current = waitBotTarget;
+    sniperBotStatusRef.current = sniperBotStatus;
+    sniperLockedAlgoRef.current = sniperLockedAlgo;
     botStartTimeRef.current = botStartTime;
-  }, [winStopEnabled, winStopAmount, loseStopEnabled, loseStopAmount, autoBaseAmount, autoMultiplierMode, consecutiveLosses, autoStrategy, waitStreakThreshold, waitBotStatus, waitBotTarget, botStartTime]);
+  }, [winStopEnabled, winStopAmount, loseStopEnabled, loseStopAmount, autoBaseAmount, autoMultiplierMode, consecutiveLosses, autoStrategy, waitStreakThreshold, waitBotStatus, waitBotTarget, sniperBotStatus, sniperLockedAlgo, botStartTime]);
 
   useEffect(() => {
     nonStopAutoBetRef.current = nonStopAutoBet;
@@ -383,6 +393,10 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
     waitBotStatusRef.current = 'WAITING';
     setWaitBotTarget(null);
     waitBotTargetRef.current = null;
+    setSniperBotStatus('WAITING');
+    sniperBotStatusRef.current = 'WAITING';
+    setSniperLockedAlgo(null);
+    sniperLockedAlgoRef.current = null;
     setBotStartTime(null);
     setBotElapsedSeconds(0);
     setTargetProfitDuration(null);
@@ -402,6 +416,10 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
     waitBotStatusRef.current = 'WAITING';
     setWaitBotTarget(null);
     waitBotTargetRef.current = null;
+    setSniperBotStatus('WAITING');
+    sniperBotStatusRef.current = 'WAITING';
+    setSniperLockedAlgo(null);
+    sniperLockedAlgoRef.current = null;
     
     const now = Date.now();
     setBotStartTime(now);
@@ -412,6 +430,16 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
 
     if (autoStrategyRef.current === 'WAIT_BOT') {
       setAutoFeedback(`🔄 Wait Bot စတင်ပါပြီ! ကြီး/ငယ် ${waitStreakThresholdRef.current} ကြိမ် ပြည့်လျှင် ဆန့်ကျင်ဘက်ကို win ဖြစ်သည်အထိ စတင်လောင်းပါမည်။`);
+    } else if (
+      autoStrategyRef.current === 'SNIPER_5LOSS' ||
+      bettingEngineMode === 'SNIPER_5LOSS_MODE'
+    ) {
+      setAutoFeedback(`🎯 [5-Loss Sniper Bot စတင်ပါပြီ!] Method ၇ မျိုးထဲမှ ၅ ကြိမ်ဆက်တိုက်ရှုံးသော Method ကို စတင်စောင့်ဆိုင်းနေပါသည် (၃ ကြိမ်ရှုံးလျှင် "I found 3 lose method" အသံမြည်ပါမည်)...`);
+    } else if (
+      autoStrategyRef.current === 'SNIPER_6LOSS' ||
+      bettingEngineMode === 'SNIPER_6LOSS_MODE'
+    ) {
+      setAutoFeedback(`🎯 [6-Loss Sniper Bot စတင်ပါပြီ!] Method ၇ မျိုးထဲမှ ၆ ကြိမ်ဆက်တိုက်ရှုံးသော Method ကို စတင်စောင့်ဆိုင်းနေပါသည်...`);
     } else {
       setAutoFeedback(`🔄 Auto Bot အသစ်စတင်ပါပြီ! စတင်လောင်းကြေး K ${autoBaseAmount.toLocaleString()} MMK (${autoMultiplierMode}× ဆတိုး) ဖြင့် Timer စတင်ပါပြီ။`);
     }
@@ -457,7 +485,7 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
     const loseTxt = targetFormula.loseStopEnabled === false ? 'OFF' : `-K ${targetFormula.recommendedLoseStop.toLocaleString()}`;
 
     setAutoFeedback(
-      `🎮 [30-MIN FORMULA အတိုင်း ကစားခြင်း] ${targetFormula.burmeseTitle} စနစ်ဖြင့် ${targetFormula.recommendedMethod} (စတင်ကြေး: K ${targetFormula.recommendedBaseStake.toLocaleString()} • ${targetFormula.recommendedMultiplier}× ဆတိုး • Win Stop: ${winTxt} • Lose Stop: ${loseTxt}) Auto Bot စတင်လောင်းပါပြီ!`
+      `🎮 [10-MIN FORMULA အတိုင်း ကစားခြင်း] ${targetFormula.burmeseTitle} စနစ်ဖြင့် ${targetFormula.recommendedMethod} (စတင်ကြေး: K ${targetFormula.recommendedBaseStake.toLocaleString()} • ${targetFormula.recommendedMultiplier}× ဆတိုး • Win Stop: ${winTxt} • Lose Stop: ${loseTxt}) Auto Bot စတင်လောင်းပါပြီ!`
     );
   };
 
@@ -549,9 +577,15 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
       let betType: 'SIZE' = 'SIZE';
       let betChoice: 'BIG' | 'SMALL' = prediction?.size || 'BIG';
 
-      if (autoStrategy === 'AI_GUESS') {
+      const isSniperActive = 
+        bettingEngineMode === 'SNIPER_5LOSS_MODE' || 
+        bettingEngineMode === 'SNIPER_6LOSS_MODE' || 
+        autoStrategy === 'SNIPER_6LOSS' || 
+        autoStrategy === 'SNIPER_5LOSS';
+
+      if (autoStrategy === 'AI_GUESS' && !isSniperActive) {
         betChoice = prediction?.size || 'BIG';
-      } else if (autoStrategy === 'WAIT_BOT') {
+      } else if (autoStrategy === 'WAIT_BOT' && !isSniperActive) {
         const streak = getConsecutiveStreak(history);
 
         if (waitBotStatusRef.current === 'WAITING') {
@@ -569,6 +603,50 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
           }
         } else {
           betChoice = waitBotTargetRef.current || streak.opposite || 'BIG';
+        }
+      } else if (isSniperActive) {
+        const targetThreshold: 5 | 6 = (bettingEngineMode === 'SNIPER_6LOSS_MODE' || autoStrategy === 'SNIPER_6LOSS') ? 6 : 5;
+        // 5-LOSS OR 6-LOSS SNIPER WAIT & STRIKE STRATEGY
+        if (sniperBotStatusRef.current === 'STRIKING' && sniperLockedAlgoRef.current) {
+          // Already locked onto a method: continue betting ONLY with this method until win!
+          const lockedAlgo = sniperLockedAlgoRef.current;
+          const lockedPred = methodPredictions?.[lockedAlgo];
+          betChoice = lockedPred?.size || prediction?.size || 'BIG';
+          setAutoFeedback(
+            `🎯 [Sniper Strike လောင်းနေပါသည်] ${targetThreshold} ကြိမ်ရှုံးထားသော [${lockedAlgo}] အား Win ဖြစ်သည်အထိ K ${requiredStake.toLocaleString()} MMK [${betChoice === 'BIG' ? 'ကြီး (BIG)' : 'ငယ် (SMALL)'}] ဆက်တိုက်လောင်းနေပါသည်! (Strike အဆင့် ${currentLosses + 1})`
+          );
+        } else {
+          // In WAITING status: scan all 7 methods to find if any reached target consecutive losses
+          const evalResult = methodStats ? evaluateAllMethodsLossStreaks(methodStats, targetThreshold) : null;
+          const readyList = targetThreshold === 5 ? evalResult?.readyMethods5 : evalResult?.readyMethods6;
+
+          if (readyList && readyList.length > 0) {
+            // Target found! Lock onto this method!
+            const target = readyList[0];
+            setSniperBotStatus('STRIKING');
+            sniperBotStatusRef.current = 'STRIKING';
+            setSniperLockedAlgo(target.algorithm);
+            sniperLockedAlgoRef.current = target.algorithm;
+
+            const lockedPred = methodPredictions?.[target.algorithm];
+            betChoice = lockedPred?.size || prediction?.size || 'BIG';
+
+            try {
+              playSniperStrikeSound();
+            } catch {}
+
+            setAutoFeedback(
+              `🎯 [${targetThreshold}-LOSS SNIPER LOCK!] Method [${target.label}] သည် ${targetThreshold} ကြိမ် ဆက်တိုက် ရှုံးပြီးဖြစ်၍ Win ဖြစ်သည်အထိ ဤ Method တမျိုးတည်းဖြင့် K ${requiredStake.toLocaleString()} MMK စတင်လောင်းပါပြီ!`
+            );
+          } else {
+            // No method has reached target losses yet: wait quietly!
+            const maxLoss = evalResult?.highestLossCount || 0;
+            const maxAlgo = evalResult?.highestLossAlgo;
+            setAutoFeedback(
+              `🎯 [${targetThreshold}-Loss Sniper စောင့်ဆိုင်းနေပါသည်] ${targetThreshold} ကြိမ် ဆက်တိုက်ရှုံးသော Method ကို စောင့်နေပါသည်... (လက်ရှိ အများဆုံးရှုံး: [${maxAlgo || 'Scanning'}] ${maxLoss}/${targetThreshold} ကြိမ်) • ${targetThreshold} ကြိမ် ပြည့်ပါက အလိုအလျောက် စတင်လောင်းပါမည်။`
+            );
+            return; // DO NOT BET! Wait for target consecutive losses!
+          }
         }
       }
 
@@ -670,6 +748,17 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
                   waitBotStatusRef.current = 'WAITING';
                   setWaitBotTarget(null);
                   waitBotTargetRef.current = null;
+                } else if (
+                  autoStrategyRef.current === 'SNIPER_5LOSS' ||
+                  autoStrategyRef.current === 'SNIPER_6LOSS' ||
+                  bettingEngineMode === 'SNIPER_5LOSS_MODE' ||
+                  bettingEngineMode === 'SNIPER_6LOSS_MODE'
+                ) {
+                  // User requirement: Win ဖြစ်ရင် bet တာရပ်ပြီး နောက်တကြိမ် Bet ဖို့ 5 ကြိမ် / 6 ကြိမ်ဆက်တိုက်ရှုံးတဲ့ METHOD ကိုပြန် wait ပြီး bet မယ်
+                  setSniperBotStatus('WAITING');
+                  sniperBotStatusRef.current = 'WAITING';
+                  setSniperLockedAlgo(null);
+                  sniperLockedAlgoRef.current = null;
                 }
 
                 // TARGET PROFIT REACHED CHECK
@@ -704,6 +793,14 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
                 } else {
                   if (autoStrategyRef.current === 'WAIT_BOT') {
                     setAutoFeedback(`🎉 [Wait Bot Win!] ဆန့်ကျင်ဘက် [${bet.selection === 'BIG' ? 'ကြီး' : 'ငယ်'}] နိုင်ပါသဖြင့် (+K ${netGain.toLocaleString()} MMK) မူလစတင်ငွေ K ${resetStake.toLocaleString()} MMK သို့ ပြန်သတ်မှတ်ကာ streak ပြန်လည်စောင့်ဆိုင်းပါမည်!`);
+                  } else if (
+                    autoStrategyRef.current === 'SNIPER_5LOSS' ||
+                    autoStrategyRef.current === 'SNIPER_6LOSS' ||
+                    bettingEngineMode === 'SNIPER_5LOSS_MODE' ||
+                    bettingEngineMode === 'SNIPER_6LOSS_MODE'
+                  ) {
+                    const targetStreak = (autoStrategyRef.current === 'SNIPER_5LOSS' || bettingEngineMode === 'SNIPER_5LOSS_MODE') ? 5 : 6;
+                    setAutoFeedback(`🏆 [SNIPER WIN & PROFIT BANKED!] Locked Method ဖြင့် အနိုင်ရရှိပါသဖြင့် (+K ${netGain.toLocaleString()} MMK) Bet တာချက်ချင်းရပ်တန့်ပြီး နောက်တစ်ကြိမ် ${targetStreak} ကြိမ်ရှုံးမည့် Method ကို ပြန်လည်စောင့်ဆိုင်းပါမည်!`);
                   } else {
                     setAutoFeedback(`🎉 [Auto Bet #${latestDraw.period.slice(-5)}] နိုင်ပါသဖြင့် (+K ${netGain.toLocaleString()} MMK) မူလစတင်ငွေ K ${resetStake.toLocaleString()} MMK သို့ ချက်ချင်း ပြန်သတ်မှတ်ပြီးပါပြီ!`);
                   }
@@ -730,8 +827,13 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
                   const nextStake = Math.round(autoBaseAmountRef.current * Math.pow(mult, nextLosses));
                   setCurrentAutoStake(nextStake);
 
-                  // User 2 ကြိမ်ဆက်တိုက် lose ဖြစ်နေလျှင် win rate အများဆုံး method သို့ AI မှ Auto ချက်ချင်း change လုပ်ပေးပါ
-                  if (nextLosses >= 2 && methodStats && onChangeAiAlgorithm) {
+                  // User 2 ကြိမ်ဆက်တိုက် lose ဖြစ်နေလျှင် win rate အများဆုံး method သို့ AI မှ Auto ချက်ချင်း change လုပ်ပေးပါ (Except for 5-Loss / 6-Loss Sniper Mode which sticks to the locked method exclusively)
+                  const isSniperActive =
+                    autoStrategyRef.current === 'SNIPER_5LOSS' ||
+                    autoStrategyRef.current === 'SNIPER_6LOSS' ||
+                    bettingEngineMode === 'SNIPER_5LOSS_MODE' ||
+                    bettingEngineMode === 'SNIPER_6LOSS_MODE';
+                  if (!isSniperActive && nextLosses >= 2 && methodStats && onChangeAiAlgorithm) {
                     const algos: AlgorithmType[] = ['HMM', 'MARKOV', 'ENSEMBLE', 'NEURAL_MATRIX', 'NGRAM_SEQUENCE', 'STATISTICAL_PROB', 'META_SUPER_AI'];
                     const ranked = [...algos].sort((a, b) => {
                       if ((methodStats[b]?.winRate || 0) !== (methodStats[a]?.winRate || 0)) {
@@ -752,6 +854,13 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
 
                   if (autoStrategyRef.current === 'WAIT_BOT') {
                     setAutoFeedback(`⚠️ [Wait Bot #${latestDraw.period.slice(-5)}] ဆန့်ကျင်ဘက် [${bet.selection === 'BIG' ? 'ကြီး' : 'ငယ်'}] မထွက်သေးသဖြင့် ${mult}× ဆတိုးပြီး နောက်ပွဲအတွက် K ${nextStake.toLocaleString()} MMK ဆက်လောင်းပါမည်! (အဆင့်: ${nextLosses + 1})`);
+                  } else if (
+                    autoStrategyRef.current === 'SNIPER_5LOSS' ||
+                    autoStrategyRef.current === 'SNIPER_6LOSS' ||
+                    bettingEngineMode === 'SNIPER_5LOSS_MODE' ||
+                    bettingEngineMode === 'SNIPER_6LOSS_MODE'
+                  ) {
+                    setAutoFeedback(`⚠️ [SNIPER STRIKE HOLD] Locked Method [${sniperLockedAlgoRef.current}] ဖြင့် Win မဖြစ်မချင်း ${mult}× ဆတိုးပြီး K ${nextStake.toLocaleString()} MMK ဆက်လက်လောင်းပါမည်! (Strike အဆင့်: ${nextLosses + 1})`);
                   } else {
                     setAutoFeedback(`⚠️ [Auto Bet #${latestDraw.period.slice(-5)}] ရှုံးသဖြင့် ${mult}× ဆတိုးပြီး နောက်ပွဲအတွက် K ${nextStake.toLocaleString()} MMK သတ်မှတ်လိုက်ပါပြီ! (အဆင့်: ${nextLosses + 1})`);
                   }
@@ -1006,19 +1115,29 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
           </div>
         </div>
 
-        {/* DUAL-MODE BETTING ENGINE EXPLICIT STATUS BANNER (User requirement: Formula mode လား Method 7 မျိုးလား ရှင်းလင်းစွာ ခွဲခြားသိရှိနိုင်စေရန်) */}
+        {/* MULTI-MODE BETTING ENGINE EXPLICIT STATUS BANNER (Formula mode vs Method 7 မျိုး vs 5-Loss & 6-Loss Sniper) */}
         <div className={`p-3.5 sm:p-4 rounded-xl border-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg ${
-          bettingEngineMode === 'FORMULA_MODE'
+          bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS'
+            ? 'bg-gradient-to-r from-red-600/25 via-slate-950 to-orange-950/30 border-red-400/90 shadow-[0_0_25px_rgba(239,68,68,0.35)]'
+            : bettingEngineMode === 'SNIPER_6LOSS_MODE' || autoStrategy === 'SNIPER_6LOSS'
+            ? 'bg-gradient-to-r from-rose-500/20 via-slate-950 to-rose-950/30 border-rose-400/80 shadow-[0_0_20px_rgba(244,63,94,0.25)]'
+            : bettingEngineMode === 'FORMULA_MODE'
             ? 'bg-gradient-to-r from-amber-500/20 via-slate-950 to-amber-950/30 border-amber-400/80 shadow-[0_0_20px_rgba(245,158,11,0.25)]'
             : 'bg-gradient-to-r from-cyan-500/20 via-slate-950 to-cyan-950/30 border-cyan-400/80 shadow-[0_0_20px_rgba(6,182,212,0.25)]'
         }`}>
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-xl border shrink-0 ${
-              bettingEngineMode === 'FORMULA_MODE'
+              bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS'
+                ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                : bettingEngineMode === 'SNIPER_6LOSS_MODE' || autoStrategy === 'SNIPER_6LOSS'
+                ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
+                : bettingEngineMode === 'FORMULA_MODE'
                 ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
                 : 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400'
             }`}>
-              {bettingEngineMode === 'FORMULA_MODE' ? (
+              {bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS' || bettingEngineMode === 'SNIPER_6LOSS_MODE' || autoStrategy === 'SNIPER_6LOSS' ? (
+                <Crosshair className="w-5 h-5 text-red-400 animate-pulse" />
+              ) : bettingEngineMode === 'FORMULA_MODE' ? (
                 <Sparkles className="w-5 h-5 text-amber-400 animate-spin" style={{ animationDuration: '8s' }} />
               ) : (
                 <Cpu className="w-5 h-5 text-cyan-400 animate-pulse" />
@@ -1028,51 +1147,112 @@ export const PlayableGameStation: React.FC<PlayableGameStationProps> = ({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
-                  bettingEngineMode === 'FORMULA_MODE'
+                  bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS'
+                    ? 'bg-red-500 text-white shadow ring-1 ring-red-300'
+                    : bettingEngineMode === 'SNIPER_6LOSS_MODE' || autoStrategy === 'SNIPER_6LOSS'
+                    ? 'bg-rose-500 text-white shadow'
+                    : bettingEngineMode === 'FORMULA_MODE'
                     ? 'bg-amber-500 text-black shadow'
                     : 'bg-cyan-500 text-black shadow'
                 }`}>
-                  {bettingEngineMode === 'FORMULA_MODE' ? '🧬 30-MIN FORMULA MODE ACTIVE' : '⚡ 7-METHOD MULTI-AI MODE ACTIVE'}
+                  {bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS'
+                    ? '🎯 5-LOSS SNIPER MODE ACTIVE'
+                    : bettingEngineMode === 'SNIPER_6LOSS_MODE' || autoStrategy === 'SNIPER_6LOSS'
+                    ? '🎯 6-LOSS SNIPER MODE ACTIVE'
+                    : bettingEngineMode === 'FORMULA_MODE'
+                    ? '🧬 10-MIN FORMULA MODE ACTIVE'
+                    : '⚡ 7-METHOD MULTI-AI MODE ACTIVE'}
                 </span>
                 <span className="text-xs font-tech font-bold text-white">
-                  {bettingEngineMode === 'FORMULA_MODE'
-                    ? `[30-MINUTES AI FORMULA စနစ်ဖြင့် လောင်းနေပါသည်]`
+                  {bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS'
+                    ? `[၅ ကြိမ်ရှုံး စောင့်ဆိုင်း SNIPER စနစ် (၃ ကြိမ်ရှုံး "I found 3 lose method" အသံ)]`
+                    : bettingEngineMode === 'SNIPER_6LOSS_MODE' || autoStrategy === 'SNIPER_6LOSS'
+                    ? `[၆ ကြိမ်ရှုံး စောင့်ဆိုင်း SNIPER စနစ် (၄ ကြိမ်ရှုံး Scatter အသံ)]`
+                    : bettingEngineMode === 'FORMULA_MODE'
+                    ? `[10-MINUTES AI FORMULA စနစ်ဖြင့် လောင်းနေပါသည်]`
                     : `[နည်းပညာ ၇ မျိုး MULTI-AI စနစ်ဖြင့် လောင်းနေပါသည်]`}
                 </span>
               </div>
 
               <span className="text-[11px] text-slate-300 font-sans block mt-1">
-                {bettingEngineMode === 'FORMULA_MODE'
+                {bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS' || bettingEngineMode === 'SNIPER_6LOSS_MODE' || autoStrategy === 'SNIPER_6LOSS'
+                  ? `Sniper Status: ${
+                      sniperBotStatus === 'STRIKING'
+                        ? `🔥 STRIKING ON [${sniperLockedAlgo}] (Win မဖြစ်မချင်း ဤ Method တမျိုးတည်း လောင်းမည်)`
+                        : `⏳ WAITING FOR ${bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS' ? '5-LOSS' : '6-LOSS'} METHOD (${bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS' ? '၅' : '၆'} ကြိမ်ရှုံး Method စောင့်နေပါသည်)`
+                    }`
+                  : bettingEngineMode === 'FORMULA_MODE'
                   ? `Formula: ${activeFormula?.code || 'Active'} • ${activeFormula?.burmeseTitle || ''} • (Base: K ${autoBaseAmount.toLocaleString()} • Win Stop: ${winStopEnabled ? '+' + winStopAmount.toLocaleString() : 'OFF'} • Lose Stop: ${loseStopEnabled ? '-' + loseStopAmount.toLocaleString() : 'OFF'} • ${autoMultiplierMode}× Mult)`
                   : `Method: [${aiAlgorithm}] • တိုက်ရိုက်ရွေးချယ်ထားသော စနစ်ဖြင့် လောင်းနေပါသည် (၂ ကြိမ်ရှုံးလျှင် Auto-Switch)`}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-end">
-            {bettingEngineMode === 'FORMULA_MODE' ? (
+          <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-end flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                onSelectMode?.('SNIPER_5LOSS_MODE');
+                setAutoStrategy('SNIPER_5LOSS');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow ${
+                bettingEngineMode === 'SNIPER_5LOSS_MODE' || autoStrategy === 'SNIPER_5LOSS'
+                  ? 'bg-red-500 text-white ring-2 ring-red-300'
+                  : 'bg-slate-800 hover:bg-slate-700 text-red-300 border border-slate-700'
+              }`}
+            >
+              <Crosshair className="w-3.5 h-3.5" />
+              <span>🎯 5-Loss (Voice Alarm)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onSelectMode?.('SNIPER_6LOSS_MODE');
+                setAutoStrategy('SNIPER_6LOSS');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow ${
+                bettingEngineMode === 'SNIPER_6LOSS_MODE' || autoStrategy === 'SNIPER_6LOSS'
+                  ? 'bg-rose-500 text-white ring-1 ring-rose-300'
+                  : 'bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700'
+              }`}
+            >
+              <Crosshair className="w-3.5 h-3.5" />
+              <span>🎯 6-Loss</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onSelectMode?.('METHODS_7_MODE');
+                setAutoStrategy('AI_GUESS');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow ${
+                bettingEngineMode === 'METHODS_7_MODE' && autoStrategy !== 'SNIPER_6LOSS' && autoStrategy !== 'SNIPER_5LOSS'
+                  ? 'bg-cyan-500 text-black ring-1 ring-cyan-300'
+                  : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700'
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5" />
+              <span>⚡ နည်းပညာ ၇ မျိုး</span>
+            </button>
+
+            {activeFormula && (
               <button
                 type="button"
-                onClick={() => onSelectMode?.('METHODS_7_MODE')}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-mono font-bold border border-slate-700 flex items-center gap-1.5 transition-all shadow"
+                onClick={() => {
+                  onSelectMode?.('FORMULA_MODE');
+                  applyFormulaToAutoBet(activeFormula);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-tech font-black flex items-center gap-1.5 shadow transition-all ${
+                  bettingEngineMode === 'FORMULA_MODE'
+                    ? 'bg-amber-500 text-black ring-1 ring-amber-300'
+                    : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700'
+                }`}
               >
-                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                <span>⚡ နည်းပညာ ၇ မျိုးသို့ ပြောင်းမည်</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>🧬 10-Min Formula</span>
               </button>
-            ) : (
-              activeFormula && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSelectMode?.('FORMULA_MODE');
-                    applyFormulaToAutoBet(activeFormula);
-                  }}
-                  className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-xs font-tech font-black flex items-center gap-1.5 shadow transition-all active:scale-95"
-                >
-                  <Sparkles className="w-3.5 h-3.5 fill-black" />
-                  <span>🎮 30-MIN FORMULA သို့ ပြောင်းမည်</span>
-                </button>
-              )
             )}
           </div>
         </div>

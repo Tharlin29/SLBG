@@ -1,12 +1,12 @@
 import { WingoDraw, AiFormula, DrawSize, AlgorithmType } from '../types/lottery';
 
-const FORMULA_CYCLE_DURATION_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
+const FORMULA_CYCLE_DURATION_MS = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 /**
  * Game website ၏ လတ်တလောထွက်ရှိခဲ့သော history များကို AI မှ search လုပ်ပြီး
  * အကောင်းဆုံးကစားနိုင်မည့် Formula ကို တွက်ချက်ထုတ်ပေးသည့် Engine ဖြစ်ပါသည်။
  * User ကစားသည်ဖြစ်စေ၊ မကစားသည်ဖြစ်စေ နောက်ကွယ်တွင် တပြိုင်နက် run ထားပြီး
- * ၃၀ မိနစ်ပြည့်တိုင်း Formula အသစ်ကို အလိုအလျောက် ထုတ်ပေးပါသည်။
+ * ၁၀ မိနစ်ပြည့်တိုင်း Formula အသစ်ကို အလိုအလျောက် ထုတ်ပေးပါသည်။
  */
 export function generateAiFormulaFromHistory(
   history: WingoDraw[],
@@ -192,7 +192,7 @@ export function generateAiFormulaFromHistory(
 }
 
 /**
- * Check if the 30-minute formula duration has elapsed
+ * Check if the 10-minute formula duration has elapsed
  */
 export function isFormulaExpired(formula: AiFormula | null | undefined): boolean {
   if (!formula) return true;
@@ -200,7 +200,7 @@ export function isFormulaExpired(formula: AiFormula | null | undefined): boolean
 }
 
 /**
- * Get remaining seconds until the next 30-minute formula refresh
+ * Get remaining seconds until the next 10-minute formula refresh
  */
 export function getFormulaRemainingSeconds(formula: AiFormula | null | undefined): number {
   if (!formula) return 0;

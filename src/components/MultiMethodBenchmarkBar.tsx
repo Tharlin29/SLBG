@@ -212,7 +212,7 @@ export const MultiMethodBenchmarkBar: React.FC<MultiMethodBenchmarkBarProps> = (
               </span>
             ) : (
               <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
-                30-MIN FORMULA ACTIVE
+                10-MIN FORMULA ACTIVE
               </span>
             )}
 

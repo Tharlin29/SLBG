@@ -220,7 +220,7 @@ export const AiFormulaPanel: React.FC<AiFormulaPanelProps> = ({
       <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 text-center animate-pulse">
         <Sparkles className="w-5 h-5 text-amber-400 mx-auto animate-spin mb-2" />
         <span className="text-xs font-mono text-slate-300">
-          Game Website History များကို AI မှ Search လုပ်ပြီး 30-Min Formula တွက်ထုတ်နေပါသည်...
+          Game Website History များကို AI မှ Search လုပ်ပြီး 10-Min Formula တွက်ထုတ်နေပါသည်...
         </span>
       </div>
     );
@@ -229,7 +229,7 @@ export const AiFormulaPanel: React.FC<AiFormulaPanelProps> = ({
   return (
     <div className="rounded-2xl bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-slate-900/95 border-2 border-amber-500/40 shadow-2xl overflow-hidden ring-1 ring-amber-500/20">
       
-      {/* HEADER BAR: 30-MINUTE CYCLE RADAR */}
+      {/* HEADER BAR: 10-MINUTE CYCLE RADAR */}
       <div className="p-3.5 sm:p-4 bg-gradient-to-r from-slate-900 via-amber-950/40 to-slate-900 border-b border-amber-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 text-black shadow-lg shadow-amber-500/30 shrink-0">
@@ -240,7 +240,7 @@ export const AiFormulaPanel: React.FC<AiFormulaPanelProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-tech text-sm sm:text-base font-black text-white tracking-wider">
-                AI HISTORY SEARCH & 30-MINUTES FORMULA ENGINE
+                AI HISTORY SEARCH & 10-MINUTES FORMULA ENGINE
               </h3>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
@@ -248,12 +248,12 @@ export const AiFormulaPanel: React.FC<AiFormulaPanelProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5 font-sans">
-              Game Website ၏ လတ်တလောထွက်ရှိခဲ့သော History များကို AI မှ အမြဲတစေ Search လုပ်ပြီး ၃၀ မိနစ်ပြည့်တိုင်း အကောင်းဆုံး Formula အသစ်ကို အလိုအလျောက် ထုတ်ပေးပါသည်
+              Game Website ၏ လတ်တလောထွက်ရှိခဲ့သော History များကို AI မှ အမြဲတစေ Search လုပ်ပြီး ၁၀ မိနစ်ပြည့်တိုင်း အကောင်းဆုံး Formula အသစ်ကို အလိုအလျောက် ထုတ်ပေးပါသည်
             </p>
           </div>
         </div>
 
-        {/* 30-MIN COUNTDOWN CLOCK & REFRESH ACTION */}
+        {/* 10-MIN COUNTDOWN CLOCK & REFRESH ACTION */}
         <div className="flex items-center gap-2.5 self-end md:self-center shrink-0">
           <div className="flex items-center gap-2 bg-slate-950/90 px-3 py-1.5 rounded-xl border border-amber-500/30 shadow-inner">
             <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
@@ -765,7 +765,7 @@ export const AiFormulaPanel: React.FC<AiFormulaPanelProps> = ({
             <div className="w-full py-3.5 px-4 rounded-xl bg-amber-500/20 border-2 border-amber-400 text-amber-200 font-tech font-black text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
               <CheckCircle2 className="w-5 h-5 text-amber-400 animate-pulse" />
               <span>
-                ✅ 30-MIN FORMULA စနစ်ဖြင့် AUTO BET လတ်တလော ကစားနေပါသည် (Base: K {customBaseStake.toLocaleString()} | {customMultiplier}×)
+                ✅ 10-MIN FORMULA စနစ်ဖြင့် AUTO BET လတ်တလော ကစားနေပါသည် (Base: K {customBaseStake.toLocaleString()} | {customMultiplier}×)
               </span>
             </div>
           ) : (

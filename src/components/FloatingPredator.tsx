@@ -21,7 +21,7 @@ import {
   Target,
   Cpu
 } from 'lucide-react';
-import { PredictionResult, WingoDraw, AlgorithmType, AllMethodsStats, AutoSwitchEvent, UserAccessState, AiFormula, BettingEngineMode } from '../types/lottery';
+import { PredictionResult, WingoDraw, AlgorithmType, AllMethodsStats, AutoSwitchEvent, UserAccessState, AiFormula, BettingEngineMode, ScatterAlarmEvent } from '../types/lottery';
 
 interface FloatingPredatorProps {
   prediction: PredictionResult | null;
@@ -47,6 +47,9 @@ interface FloatingPredatorProps {
   onApplyFormula?: (formula: AiFormula) => void;
   bettingEngineMode?: BettingEngineMode;
   onSelectMode?: (mode: BettingEngineMode) => void;
+  activeScatterAlarm?: ScatterAlarmEvent | null;
+  onDismissScatterAlarm?: () => void;
+  onActivateSniper?: () => void;
   // Optional for backward compatibility with App
   userAccess?: UserAccessState;
   onOpenAdmin?: () => void;
@@ -139,6 +142,9 @@ export const FloatingPredator: React.FC<FloatingPredatorProps> = ({
   onApplyFormula,
   bettingEngineMode = 'METHODS_7_MODE',
   onSelectMode,
+  activeScatterAlarm,
+  onDismissScatterAlarm,
+  onActivateSniper,
 }) => {
   const [isMinimized, setIsMinimized] = useState(() => {
     return typeof window !== 'undefined' && window.innerWidth < 640;
@@ -423,7 +429,7 @@ export const FloatingPredator: React.FC<FloatingPredatorProps> = ({
             </div>
           </div>
 
-          {/* DUAL-MODE SWITCHER IN FLOATING RADAR HUD */}
+          {/* MULTI-MODE SWITCHER IN FLOATING RADAR HUD */}
           <div className="px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-[10px]">
             <span className="font-mono text-slate-400 uppercase font-bold flex items-center gap-1">
               <span>MODE:</span>
@@ -442,7 +448,7 @@ export const FloatingPredator: React.FC<FloatingPredatorProps> = ({
                 }`}
               >
                 <Sparkles className="w-2.5 h-2.5" />
-                <span>30-MIN FORMULA</span>
+                <span>10-MIN</span>
               </button>
 
               <button
@@ -455,13 +461,103 @@ export const FloatingPredator: React.FC<FloatingPredatorProps> = ({
                 }`}
               >
                 <Cpu className="w-2.5 h-2.5" />
-                <span>နည်းပညာ ၇ မျိုး</span>
+                <span>၇ မျိုး</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectMode?.('SNIPER_5LOSS_MODE');
+                  onActivateSniper?.();
+                }}
+                className={`px-2 py-0.5 rounded font-mono font-bold transition-all flex items-center gap-1 ${
+                  bettingEngineMode === 'SNIPER_5LOSS_MODE'
+                    ? 'bg-red-500 text-white shadow ring-1 ring-red-300'
+                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <Crosshair className="w-2.5 h-2.5" />
+                <span>5-SNIPER</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectMode?.('SNIPER_6LOSS_MODE');
+                  onActivateSniper?.();
+                }}
+                className={`px-2 py-0.5 rounded font-mono font-bold transition-all flex items-center gap-1 ${
+                  bettingEngineMode === 'SNIPER_6LOSS_MODE'
+                    ? 'bg-rose-500 text-white shadow ring-1 ring-rose-300'
+                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <Crosshair className="w-2.5 h-2.5" />
+                <span>6-SNIPER</span>
               </button>
             </div>
           </div>
 
           {/* MAIN RADAR BODY: HISTORY-BASED SIGNAL RECOMMENDATION */}
           <div className="p-3 space-y-2.5 max-h-[75vh] overflow-y-auto">
+            
+            {/* 3-LOSS VOICE / 4-LOSS SCATTER ALARM STRIP IN RADAR */}
+            {activeScatterAlarm && (
+              <div className={`p-2.5 rounded-xl border shadow space-y-1.5 animate-pulse ${
+                activeScatterAlarm.level === 'FOUND_3_LOSS' || activeScatterAlarm.level === 'LOCKED_5'
+                  ? 'bg-gradient-to-r from-red-950/90 via-orange-950/80 to-slate-950 border-red-400'
+                  : 'bg-gradient-to-r from-rose-950/80 via-amber-950/80 to-slate-950 border-amber-400'
+              }`}>
+                <div className="flex items-center justify-between text-[10px] font-mono">
+                  <span className="text-amber-300 font-bold flex items-center gap-1">
+                    {activeScatterAlarm.level === 'FOUND_3_LOSS' || activeScatterAlarm.level === 'LOCKED_5' ? (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5 text-yellow-400 animate-bounce" />
+                        <span className="text-yellow-300">🔊 I FOUND 3 LOSE METHOD ({activeScatterAlarm.consecutiveLosses}/5)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                        <span>🎰 SLOT SCATTER ({activeScatterAlarm.consecutiveLosses}/6)</span>
+                      </>
+                    )}
+                  </span>
+                  <span className="text-white font-bold">
+                    #{activeScatterAlarm.period ? activeScatterAlarm.period.slice(-5) : 'LIVE'}
+                  </span>
+                </div>
+                <div className="text-[11px] font-sans font-bold text-slate-100">
+                  {activeScatterAlarm.label} သည် {activeScatterAlarm.consecutiveLosses} ကြိမ် ဆက်တိုက် ရှုံးနေပါပြီ!
+                  {activeScatterAlarm.level === 'FOUND_3_LOSS' && ' (၅ ကြိမ်ရှုံးလျှင် Win မဖြစ်မချင်း ဤ Method တမျိုးတည်း လောင်းမည်)'}
+                </div>
+                <div className="flex items-center justify-between gap-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeScatterAlarm.level === 'FOUND_3_LOSS' || activeScatterAlarm.level === 'LOCKED_5') {
+                        onSelectMode?.('SNIPER_5LOSS_MODE');
+                      } else {
+                        onSelectMode?.('SNIPER_6LOSS_MODE');
+                      }
+                      onActivateSniper?.();
+                    }}
+                    className="px-2 py-1 rounded bg-red-600 hover:bg-red-500 text-white font-tech font-bold text-[10px] flex items-center gap-1 cursor-pointer shadow"
+                  >
+                    <Crosshair className="w-3 h-3" />
+                    <span>🎯 {activeScatterAlarm.level === 'FOUND_3_LOSS' ? '5-Loss Sniper ဖွင့်မည်' : 'Sniper စနစ်ဖွင့်မည်'}</span>
+                  </button>
+                  {onDismissScatterAlarm && (
+                    <button
+                      type="button"
+                      onClick={onDismissScatterAlarm}
+                      className="px-2 py-1 rounded bg-slate-800 text-slate-300 text-[10px] cursor-pointer"
+                    >
+                      ပိတ်မည်
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             
             {/* HERO CARD: TOP RECOMMENDED METHOD ACCORDING TO PAST DRAW HISTORY */}
             {recommended && (
@@ -572,13 +668,13 @@ export const FloatingPredator: React.FC<FloatingPredatorProps> = ({
               </div>
             )}
 
-            {/* 30-MINUTES AI FORMULA SIGNAL STRIP */}
+            {/* 10-MINUTES AI FORMULA SIGNAL STRIP */}
             {activeFormula && (
               <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-amber-950/30 border border-amber-500/40 space-y-1.5 shadow">
                 <div className="flex items-center justify-between text-[10px] font-mono">
                   <span className="text-amber-400 font-bold flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-amber-400" />
-                    <span>30-MIN AI FORMULA:</span>
+                    <span>10-MIN AI FORMULA:</span>
                   </span>
                   <span className="text-emerald-400 font-bold bg-emerald-500/15 px-1.5 py-0.2 rounded border border-emerald-500/30">
                     {activeFormula.expectedWinRate}% WIN

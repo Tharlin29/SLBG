@@ -262,3 +262,202 @@ export function playMyanmarTargetProfitVoice(): Promise<void> {
     }
   });
 }
+
+// Authentic Casino Slot Machine Scatter Symbol Teaser / Alarm Sound
+// Plays exciting sparkling high-pitched arpeggio and resonant metallic bell chime
+export function playSlotScatterSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+
+  // 1. Bass Reel Thud Impact (The dramatic scatter drop)
+  try {
+    const bassOsc = ctx.createOscillator();
+    const bassGain = ctx.createGain();
+    bassOsc.type = 'sine';
+    bassOsc.frequency.setValueAtTime(140, now);
+    bassOsc.frequency.exponentialRampToValueAtTime(45, now + 0.25);
+    bassGain.gain.setValueAtTime(0.35, now);
+    bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    bassOsc.connect(bassGain);
+    bassGain.connect(ctx.destination);
+    bassOsc.start(now);
+    bassOsc.stop(now + 0.35);
+  } catch {}
+
+  // 2. Sparkling High Arpeggio (Scatter tease sequence: 7 rising bell notes)
+  const scatterNotes = [880.00, 1108.73, 1318.51, 1760.00, 2217.46, 2637.02, 3520.00];
+  scatterNotes.forEach((freq, idx) => {
+    if (!ctx) return;
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      const noteTime = now + idx * 0.045;
+      osc.frequency.setValueAtTime(freq, noteTime);
+
+      gain.gain.setValueAtTime(0.22, noteTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.35);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(noteTime);
+      osc.stop(noteTime + 0.35);
+    } catch {}
+  });
+
+  // 3. Shimmering Metallic Bell Clang (Signature Scatter Clang Ring)
+  try {
+    const bellTime = now + 0.32;
+    const bellOsc = ctx.createOscillator();
+    const bellGain = ctx.createGain();
+    bellOsc.type = 'sine';
+    bellOsc.frequency.setValueAtTime(2793.83, bellTime); // F7 metallic chime
+    bellGain.gain.setValueAtTime(0.28, bellTime);
+    bellGain.gain.exponentialRampToValueAtTime(0.001, bellTime + 0.7);
+
+    // Harmonic overtone for metallic sparkle
+    const harmOsc = ctx.createOscillator();
+    const harmGain = ctx.createGain();
+    harmOsc.type = 'triangle';
+    harmOsc.frequency.setValueAtTime(4186.01, bellTime); // C8 sparkle
+    harmGain.gain.setValueAtTime(0.18, bellTime);
+    harmGain.gain.exponentialRampToValueAtTime(0.001, bellTime + 0.5);
+
+    bellOsc.connect(bellGain);
+    bellGain.connect(ctx.destination);
+    harmOsc.connect(harmGain);
+    harmGain.connect(ctx.destination);
+
+    bellOsc.start(bellTime);
+    bellOsc.stop(bellTime + 0.7);
+    harmOsc.start(bellTime);
+    harmOsc.stop(bellTime + 0.5);
+  } catch {}
+
+  // 4. Secondary Teaser Echo (The 2nd scatter resonance at +0.45s)
+  scatterNotes.slice(3).forEach((freq, idx) => {
+    if (!ctx) return;
+    try {
+      const echoOsc = ctx.createOscillator();
+      const echoGain = ctx.createGain();
+      echoOsc.type = 'sine';
+      const echoTime = now + 0.45 + idx * 0.05;
+      echoOsc.frequency.setValueAtTime(freq * 1.05, echoTime);
+
+      echoGain.gain.setValueAtTime(0.16, echoTime);
+      echoGain.gain.exponentialRampToValueAtTime(0.001, echoTime + 0.3);
+
+      echoOsc.connect(echoGain);
+      echoGain.connect(ctx.destination);
+
+      echoOsc.start(echoTime);
+      echoOsc.stop(echoTime + 0.3);
+    } catch {}
+  });
+}
+
+// Sniper Target Lock & Strike Siren Sound
+export function playSniperStrikeSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  try {
+    // 2-tone futuristic laser lock chirp
+    [520, 1040, 1560].forEach((freq, idx) => {
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      const t = now + idx * 0.08;
+      osc.frequency.setValueAtTime(freq, t);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.5, t + 0.12);
+      gain.gain.setValueAtTime(0.15, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.18);
+    });
+  } catch {}
+}
+
+// User requested Alarm Sound: "I found 3 lose method"
+// Plays alert chime + native audio stream / Web Speech API saying: "I found 3 lose method"
+export function playFound3LoseMethodVoice(): Promise<void> {
+  const ctx = getAudioContext();
+  if (ctx) {
+    // Sharp radar alert chime
+    const now = ctx.currentTime;
+    [660, 990, 1320].forEach((freq, idx) => {
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        const t = now + idx * 0.1;
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.22);
+      } catch {}
+    });
+  }
+
+  return new Promise((resolve) => {
+    let audioPlayed = false;
+
+    // 1. Play audio stream from /api/audio/found-3-lose-method
+    try {
+      const audio = new Audio('/api/audio/found-3-lose-method');
+      audio.volume = 1.0;
+      audio.onended = () => resolve();
+      audio.onerror = () => fallbackSpeech();
+
+      const p = audio.play();
+      if (p !== undefined) {
+        p.then(() => {
+          audioPlayed = true;
+        }).catch(() => fallbackSpeech());
+      }
+    } catch {
+      fallbackSpeech();
+    }
+
+    // 2. Immediate Web Speech fallback if audio tag is blocked or unavailable
+    function fallbackSpeech() {
+      if (audioPlayed) return;
+      try {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance('I found 3 lose method');
+          utterance.lang = 'en-US';
+          utterance.pitch = 1.05;
+          utterance.rate = 1.0;
+          utterance.volume = 1.0;
+
+          const voices = window.speechSynthesis.getVoices();
+          const enVoice = voices.find(
+            (v) => v.lang.startsWith('en') || v.name.toLowerCase().includes('english')
+          );
+          if (enVoice) {
+            utterance.voice = enVoice;
+          }
+
+          utterance.onend = () => resolve();
+          utterance.onerror = () => resolve();
+          window.speechSynthesis.speak(utterance);
+        } else {
+          resolve();
+        }
+      } catch {
+        resolve();
+      }
+    }
+  });
+}

@@ -26,7 +26,13 @@ import {
   Bot,
   Table,
   CheckCircle2,
-  Copy
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Cpu,
+  Brain,
+  Sliders,
+  X
 } from 'lucide-react';
 import { FloatingPredator } from './components/FloatingPredator';
 import { PlayableGameStation } from './components/PlayableGameStation';
@@ -34,13 +40,15 @@ import { WingoGameBoard } from './components/WingoGameBoard';
 import { AdminPanel } from './components/AdminPanel';
 import { ShweLotteryStatus } from './components/ShweLotteryStatus';
 import { UserCoinModal } from './components/UserCoinModal';
-import { WingoDraw, PredictionResult, ShweAccount, UserAccessState, AlgorithmType, AllMethodsStats, AutoSwitchEvent, AiFormula, BettingEngineMode } from './types/lottery';
+import { WingoDraw, PredictionResult, ShweAccount, UserAccessState, AlgorithmType, AllMethodsStats, AutoSwitchEvent, AiFormula, BettingEngineMode, ScatterAlarmEvent } from './types/lottery';
 import { calculateAutoGuess, calculateAllPredictions, calculateInitialMethodStats, updateMethodStatsWithResult, evaluateAutoSwitch } from './utils/predictionEngine';
-import { playWinSound, playYouWinVoice, playRadarLockSound, playTickSound, playAdminUnlockedSound } from './utils/audio';
+import { playWinSound, playYouWinVoice, playRadarLockSound, playTickSound, playAdminUnlockedSound, playSlotScatterSound, playSniperStrikeSound, playFound3LoseMethodVoice } from './utils/audio';
 import { MultiMethodBenchmarkBar } from './components/MultiMethodBenchmarkBar';
 import { AiFormulaPanel } from './components/AiFormulaPanel';
 import { AiModeSwitcherBar } from './components/AiModeSwitcherBar';
+import { Sniper6LossPanel } from './components/Sniper6LossPanel';
 import { generateAiFormulaFromHistory, isFormulaExpired } from './utils/aiFormulaEngine';
+import { checkScatterAlarmTrigger } from './utils/sniper6LossEngine';
 
 export default function App() {
   // Navigation tabs: 'PLAY' (Default playable console), 'WEBVIEW' (shwelottery.net), 'HISTORY'
@@ -99,13 +107,41 @@ export default function App() {
   const [isAutoBotActive, setIsAutoBotActive] = useState<boolean>(false);
   const [isPredatorVisible, setIsPredatorVisible] = useState<boolean>(true);
 
-  // AI 30-Minutes Formula Generator State (runs concurrently in background)
+  // AI 10-Minutes Formula Generator State (runs concurrently in background)
   const [aiFormula, setAiFormula] = useState<AiFormula | null>(null);
   const [pendingFormulaToApply, setPendingFormulaToApply] = useState<AiFormula | null>(null);
   const aiFormulaRef = useRef<AiFormula | null>(null);
 
-  // Active Betting Engine Mode ('FORMULA_MODE' or 'METHODS_7_MODE')
+  // Active Betting Engine Mode ('FORMULA_MODE' | 'METHODS_7_MODE' | 'SNIPER_6LOSS_MODE')
   const [bettingEngineMode, setBettingEngineMode] = useState<BettingEngineMode>('METHODS_7_MODE');
+  const bettingEngineModeRef = useRef<BettingEngineMode>(bettingEngineMode);
+
+  // 6-Loss Sniper Wait & Strike Engine State (Background continuous scan)
+  const [scatterAlarmEvent, setScatterAlarmEvent] = useState<ScatterAlarmEvent | null>(null);
+  const [sniperLockedAlgo, setSniperLockedAlgo] = useState<AlgorithmType | null>(null);
+  const lastScatterTriggerRef = useRef<string>('');
+
+  // Collapsible Secondary Dashboards (Default: ALL false / title-only, so LIVE AUTO MONITORING DASHBOARD is the primary main focus)
+  const [expandedDashboards, setExpandedDashboards] = useState<{
+    formula: boolean;
+    benchmark: boolean;
+    modeSwitcher: boolean;
+    sniper: boolean;
+    gateway: boolean;
+  }>({
+    formula: false,
+    benchmark: false,
+    modeSwitcher: false,
+    sniper: false,
+    gateway: false,
+  });
+
+  const toggleDashboard = (key: keyof typeof expandedDashboards) => {
+    setExpandedDashboards((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
 
   // Tracking refs to accurately detect draw transitions
   const lastDrawnPeriodRef = useRef<string>('');
@@ -144,7 +180,11 @@ export default function App() {
     aiFormulaRef.current = aiFormula;
   }, [aiFormula]);
 
-  // Background 30-minute Formula cycle runner (runs concurrently whether user plays or not)
+  useEffect(() => {
+    bettingEngineModeRef.current = bettingEngineMode;
+  }, [bettingEngineMode]);
+
+  // Background 10-minute Formula cycle runner (runs concurrently whether user plays or not)
   useEffect(() => {
     const formulaInterval = setInterval(() => {
       if (history && history.length > 0) {
@@ -193,7 +233,7 @@ export default function App() {
             setMethodStats(initialBacktested);
           }
 
-          // Bootstrap or refresh 30-minute AI Formula based on recent history
+          // Bootstrap or refresh 10-minute AI Formula based on recent history
           if (!aiFormulaRef.current || isFormulaExpired(aiFormulaRef.current)) {
             const initialFormula = generateAiFormulaFromHistory(freshHistory, aiFormulaRef.current);
             setAiFormula(initialFormula);
@@ -225,8 +265,39 @@ export default function App() {
             setMethodStats((prevStats) => {
               const updated = updateMethodStatsWithResult(prevStats, targetPreds, latestCompleted);
 
-              // 2. Evaluate Dynamic AI Smart Auto-Switch (User lose % များနေလျှင် Win % အမြင့်ဆုံးသို့ AI မှ Auto change လုပ်ပေးခြင်း)
-              if (isAutoSwitchEnabledRef.current) {
+              // 2. 5-Loss / 6-Loss Sniper Wait & Strike Engine Background Evaluation
+              // User ကစားသည်ဖြစ်စေ မကစားသည်ဖြစ်စေ 3 ကြိမ် ဆက်တိုက်ရှုံးနေတာ တွေ့ပြီဆိုရင် "I found 3 lose method" Voice Alarm ဖြင့် Signal ပြပေးပါမည်
+              const currentThreshold: 5 | 6 = bettingEngineModeRef.current === 'SNIPER_6LOSS_MODE' ? 6 : 5;
+              const scatterEvent = checkScatterAlarmTrigger(updated, latestCompleted.period, lastScatterTriggerRef, currentThreshold);
+              if (scatterEvent) {
+                setScatterAlarmEvent(scatterEvent);
+                if (soundEnabledRef.current) {
+                  if (scatterEvent.level === 'FOUND_3_LOSS') {
+                    // User requirement: "3 ကြိမ် ဆက်တိုက်ရှုံးနေတာ တွေ့ပြီဆိုရင် user ကို အချက်ပေးသည့် ALARM SOUND အနေဖြင့် I found 3 lose method ကို use ပြီး signal ပြပေးပါ"
+                    playFound3LoseMethodVoice();
+                  } else if (scatterEvent.level === 'WARNING_4') {
+                    playSlotScatterSound();
+                  } else if (scatterEvent.level === 'LOCKED_5' || scatterEvent.level === 'LOCKED_6') {
+                    playSniperStrikeSound();
+                  }
+                }
+                if (scatterEvent.level === 'LOCKED_5' || scatterEvent.level === 'LOCKED_6') {
+                  setSniperLockedAlgo(scatterEvent.algorithm);
+                  if (bettingEngineModeRef.current === 'SNIPER_5LOSS_MODE' || bettingEngineModeRef.current === 'SNIPER_6LOSS_MODE') {
+                    setAiAlgorithm(scatterEvent.algorithm);
+                    aiAlgorithmRef.current = scatterEvent.algorithm;
+                    playSniperStrikeSound();
+                  }
+                }
+              }
+
+              // 3. Evaluate Dynamic AI Smart Auto-Switch (User lose % များနေလျှင် Win % အမြင့်ဆုံးသို့ AI မှ Auto change လုပ်ပေးခြင်း)
+              // Only active when NOT in SNIPER mode (sniper mode locks onto 5-loss or 6-loss method exclusively until win)
+              if (
+                isAutoSwitchEnabledRef.current && 
+                bettingEngineModeRef.current !== 'SNIPER_5LOSS_MODE' && 
+                bettingEngineModeRef.current !== 'SNIPER_6LOSS_MODE'
+              ) {
                 const switchResult = evaluateAutoSwitch(aiAlgorithmRef.current, updated, true, userConsecutiveLossesRef.current);
                 if (switchResult.shouldSwitch) {
                   const prevAlgo = aiAlgorithmRef.current;
@@ -451,6 +522,11 @@ export default function App() {
     setActiveTab('PLAY');
   };
 
+  const handleActivateSniper = (threshold: 5 | 6 = 5) => {
+    setBettingEngineMode(threshold === 6 ? 'SNIPER_6LOSS_MODE' : 'SNIPER_5LOSS_MODE');
+    setActiveTab('PLAY');
+  };
+
   const copyCredentials = () => {
     navigator.clipboard.writeText('Phone: 9798023829\nPassword: 166061kp');
     setCopiedLogin(true);
@@ -489,6 +565,9 @@ export default function App() {
           onApplyFormula={handleApplyAiFormula}
           bettingEngineMode={bettingEngineMode}
           onSelectMode={setBettingEngineMode}
+          activeScatterAlarm={scatterAlarmEvent}
+          onDismissScatterAlarm={() => setScatterAlarmEvent(null)}
+          onActivateSniper={handleActivateSniper}
           onClose={() => setIsPredatorVisible(false)}
         />
       )}
@@ -617,59 +696,378 @@ export default function App() {
       </header>
 
       {/* MAIN CONTAINER */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-5">
-        {/* SHWELOTTERY LIVE GATEWAY STATUS CARD (Hidden when Auto Bot is active to provide ultra clean single dashboard view) */}
-        {(!isAutoBotActive || activeTab !== 'PLAY') && (
-          <ShweLotteryStatus
-            account={account}
-            onRefreshLogin={handleRefreshLogin}
-            isSyncing={isSyncing}
-          />
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 space-y-4">
+        
+        {/* TOP ALARM NOTIFICATION (User requirement: 3 ကြိမ် ဆက်တိုက်ရှုံးနေတာ တွေ့ပြီဆိုရင် user ကို အချက်ပေးသည့် ALARM SOUND အနေဖြင့် I found 3 lose method ကို use ပြီး signal ပြပေးပါ) */}
+        {scatterAlarmEvent && (
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-2 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in ${
+            scatterAlarmEvent.level === 'FOUND_3_LOSS'
+              ? 'bg-gradient-to-r from-amber-950/90 via-yellow-950/80 to-slate-950/90 border-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.4)]'
+              : scatterAlarmEvent.level === 'LOCKED_5' || scatterAlarmEvent.level === 'LOCKED_6'
+              ? 'bg-gradient-to-r from-rose-950/90 via-red-950/80 to-slate-950/90 border-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.4)]'
+              : 'bg-gradient-to-r from-rose-950/80 via-amber-950/80 to-slate-950/90 border-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.35)]'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 shrink-0">
+                <Sparkles className="w-6 h-6 animate-spin" style={{ animationDuration: '6s' }} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs font-black px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 text-black shadow">
+                    {scatterAlarmEvent.level === 'FOUND_3_LOSS'
+                      ? `🔊 I FOUND 3 LOSE METHOD (${scatterAlarmEvent.consecutiveLosses}/5)`
+                      : scatterAlarmEvent.level === 'LOCKED_5'
+                      ? `🎯 5-LOSS SNIPER LOCK (${scatterAlarmEvent.consecutiveLosses}/5)`
+                      : scatterAlarmEvent.level === 'LOCKED_6'
+                      ? `🎯 6-LOSS SNIPER LOCK (${scatterAlarmEvent.consecutiveLosses}/6)`
+                      : `🎰 SLOT SCATTER SIGNAL (${scatterAlarmEvent.consecutiveLosses})`}
+                  </span>
+                  <span className="font-tech text-xs text-white font-bold">
+                    Period #{scatterAlarmEvent.period ? scatterAlarmEvent.period.slice(-5) : 'LIVE'}
+                  </span>
+                </div>
+                <p className="text-xs font-sans text-slate-200 mt-1 font-bold">
+                  {scatterAlarmEvent.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={() => {
+                  if (scatterAlarmEvent.level === 'FOUND_3_LOSS') {
+                    playFound3LoseMethodVoice();
+                  } else {
+                    playSlotScatterSound();
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-mono font-bold border border-amber-500/40 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>{scatterAlarmEvent.level === 'FOUND_3_LOSS' ? 'Voice အသံ' : 'Alarm အသံ'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedDashboards(prev => ({ ...prev, sniper: true }));
+                  setBettingEngineMode(scatterAlarmEvent.consecutiveLosses >= 6 ? 'SNIPER_6LOSS_MODE' : 'SNIPER_5LOSS_MODE');
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-tech font-black text-xs shadow cursor-pointer"
+              >
+                🎯 Sniper စနစ်ဖွင့်မည်
+              </button>
+              <button
+                type="button"
+                onClick={() => setScatterAlarmEvent(null)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         )}
 
-        {/* DUAL-MODE BETTING ENGINE SELECTOR & LIVE STATUS BAR */}
-        <AiModeSwitcherBar
-          currentMode={bettingEngineMode}
-          onSelectMode={setBettingEngineMode}
-          activeFormula={aiFormula}
-          currentAlgorithm={aiAlgorithm}
-          methodStats={methodStats}
-          isAutoBetActive={isAutoBotActive}
-          onApplyFormula={handleApplyAiFormula}
-          onSelectAlgorithm={(algo) => {
-            setBettingEngineMode('METHODS_7_MODE');
-            setAiAlgorithm(algo);
-          }}
-        />
+        {/* ========================================================================= */}
+        {/* COLLAPSIBLE DASHBOARDS & BANNERS (SHOWN AS TITLE-ONLY, CLICK TO EXPAND)   */}
+        {/* ========================================================================= */}
+        <div className="space-y-2">
+          {/* 1. 10-MINUTES AI FORMULA ENGINE TITLE BAR */}
+          <div className="rounded-xl border border-amber-500/30 bg-slate-900/90 shadow-md overflow-hidden transition-all">
+            <button
+              type="button"
+              onClick={() => toggleDashboard('formula')}
+              className="w-full p-3 sm:px-4 sm:py-3 flex items-center justify-between gap-3 text-left hover:bg-slate-850/80 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 shrink-0">
+                  <Brain className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-tech text-xs sm:text-sm font-bold text-white tracking-wide">
+                      🧬 AI HISTORY SEARCH & 10-MINUTES FORMULA ENGINE
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                      {aiFormula?.code || 'ACTIVE'} ({aiFormula?.expectedWinRate || 95}% Win)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                    Game History ပေါ်အခြေခံထားသော ၁၀ မိနစ် Formula နှင့် စိတ်ကြိုက် Bet / Win Stop / Lose Stop စည်းမျဉ်းများ (နှိပ်၍ အသေးစိတ် ကြည့်ရှုနိုင်ပါသည်)
+                  </p>
+                </div>
+              </div>
 
-        {/* AI HISTORY SEARCH & 30-MINUTES FORMULA ENGINE (BACKGROUND LIVE RUNNING) */}
-        <AiFormulaPanel
-          formula={aiFormula}
-          onRefreshFormula={handleRefreshAiFormula}
-          onApplyFormula={handleApplyAiFormula}
-          isAutoBetActive={isAutoBotActive}
-          currentAlgorithm={aiAlgorithm}
-          historyCount={history.length}
-          bettingEngineMode={bettingEngineMode}
-        />
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[11px] font-mono text-amber-400 font-bold hidden md:inline">
+                  {expandedDashboards.formula ? 'အသေးစိတ် ပြန်ပိတ်မည်' : 'အသေးစိတ် ဖွင့်ကြည့်မည်'}
+                </span>
+                <div className="p-1 rounded-lg bg-slate-800 text-slate-400">
+                  {expandedDashboards.formula ? <ChevronUp className="w-4 h-4 text-amber-400" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+              </div>
+            </button>
 
-        {/* REAL-TIME MULTI-METHOD BENCHMARK & ADAPTIVE AUTO-SWITCH (Medium button size) */}
-        <MultiMethodBenchmarkBar
-          stats={methodStats}
-          currentAlgorithm={aiAlgorithm}
-          onSelectAlgorithm={(algo) => {
-            setBettingEngineMode('METHODS_7_MODE');
-            setAiAlgorithm(algo);
-          }}
-          isAutoSwitchEnabled={isAutoSwitchEnabled}
-          onToggleAutoSwitch={() => setIsAutoSwitchEnabled(!isAutoSwitchEnabled)}
-          autoSwitchEvent={autoSwitchEvent}
-          onDismissAutoSwitch={() => setAutoSwitchEvent(null)}
-          predictions={methodPredictions}
-          nextPeriod={currentPeriod}
-          isUserPlaying={activeTab === 'PLAY'}
-          bettingEngineMode={bettingEngineMode}
-        />
+            {expandedDashboards.formula && (
+              <div className="p-3 sm:p-4 border-t border-slate-800/80 bg-slate-950/60 animate-in fade-in">
+                <AiFormulaPanel
+                  formula={aiFormula}
+                  onRefreshFormula={handleRefreshAiFormula}
+                  onApplyFormula={handleApplyAiFormula}
+                  isAutoBetActive={isAutoBotActive}
+                  currentAlgorithm={aiAlgorithm}
+                  historyCount={history.length}
+                  bettingEngineMode={bettingEngineMode}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 2. 7-METHOD MULTI-AI BENCHMARK & CONSENSUS RADAR TITLE BAR */}
+          <div className="rounded-xl border border-cyan-500/30 bg-slate-900/90 shadow-md overflow-hidden transition-all">
+            <button
+              type="button"
+              onClick={() => toggleDashboard('benchmark')}
+              className="w-full p-3 sm:px-4 sm:py-3 flex items-center justify-between gap-3 text-left hover:bg-slate-855 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shrink-0">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-tech text-xs sm:text-sm font-bold text-white tracking-wide">
+                      ⚡ 7 ALGORITHMS PERFORMANCE BENCHMARK & AUTO-SWITCH
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">
+                      7 METHODS LIVE
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                    နည်းပညာ ၇ မျိုး၏ Real-Time Win Rate စာရင်း၊ တပြိုင်နက် ခန့်မှန်းချက်များနှင့် ၂ ကြိမ်ရှုံး AI Auto-Switch (နှိပ်၍ အသေးစိတ် ကြည့်ရှုနိုင်ပါသည်)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[11px] font-mono text-cyan-400 font-bold hidden md:inline">
+                  {expandedDashboards.benchmark ? 'အသေးစိတ် ပြန်ပိတ်မည်' : 'အသေးစိတ် ဖွင့်ကြည့်မည်'}
+                </span>
+                <div className="p-1 rounded-lg bg-slate-800 text-slate-400">
+                  {expandedDashboards.benchmark ? <ChevronUp className="w-4 h-4 text-cyan-400" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+              </div>
+            </button>
+
+            {expandedDashboards.benchmark && (
+              <div className="p-3 sm:p-4 border-t border-slate-800/80 bg-slate-950/60 animate-in fade-in">
+                <MultiMethodBenchmarkBar
+                  stats={methodStats}
+                  currentAlgorithm={aiAlgorithm}
+                  onSelectAlgorithm={(algo) => {
+                    setBettingEngineMode('METHODS_7_MODE');
+                    setAiAlgorithm(algo);
+                  }}
+                  isAutoSwitchEnabled={isAutoSwitchEnabled}
+                  onToggleAutoSwitch={() => setIsAutoSwitchEnabled(!isAutoSwitchEnabled)}
+                  autoSwitchEvent={autoSwitchEvent}
+                  onDismissAutoSwitch={() => setAutoSwitchEvent(null)}
+                  predictions={methodPredictions}
+                  nextPeriod={currentPeriod}
+                  isUserPlaying={activeTab === 'PLAY'}
+                  bettingEngineMode={bettingEngineMode}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 3. DUAL-MODE / MULTI-MODE BETTING ENGINE SELECTOR TITLE BAR */}
+          <div className="rounded-xl border border-purple-500/30 bg-slate-900/90 shadow-md overflow-hidden transition-all">
+            <button
+              type="button"
+              onClick={() => toggleDashboard('modeSwitcher')}
+              className="w-full p-3 sm:px-4 sm:py-3 flex items-center justify-between gap-3 text-left hover:bg-slate-855 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/40 shrink-0">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-tech text-xs sm:text-sm font-bold text-white tracking-wide">
+                      🔀 MULTI-MODE BETTING ENGINE SELECTOR & STATUS
+                    </span>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border ${
+                      bettingEngineMode === 'SNIPER_6LOSS_MODE'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                        : bettingEngineMode === 'FORMULA_MODE'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                        : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                    }`}>
+                      ACTIVE: {
+                        bettingEngineMode === 'SNIPER_6LOSS_MODE'
+                          ? '🎯 6-LOSS SNIPER'
+                          : bettingEngineMode === 'FORMULA_MODE'
+                          ? '🧬 10-MIN FORMULA'
+                          : '⚡ 7-METHOD MULTI-AI'
+                      }
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                    10-Min Formula၊ နည်းပညာ ၇ မျိုး Multi-AI နှင့် ၆ ကြိမ်ရှုံး Sniper စနစ်များ အကြား စိတ်ကြိုက် ကူးပြောင်းထိန်းချုပ်မှု (နှိပ်၍ အသေးစိတ် ကြည့်ရှုနိုင်ပါသည်)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[11px] font-mono text-purple-400 font-bold hidden md:inline">
+                  {expandedDashboards.modeSwitcher ? 'အသေးစိတ် ပြန်ပိတ်မည်' : 'အသေးစိတ် ဖွင့်ကြည့်မည်'}
+                </span>
+                <div className="p-1 rounded-lg bg-slate-800 text-slate-400">
+                  {expandedDashboards.modeSwitcher ? <ChevronUp className="w-4 h-4 text-purple-400" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+              </div>
+            </button>
+
+            {expandedDashboards.modeSwitcher && (
+              <div className="p-3 sm:p-4 border-t border-slate-800/80 bg-slate-950/60 animate-in fade-in">
+                <AiModeSwitcherBar
+                  currentMode={bettingEngineMode}
+                  onSelectMode={setBettingEngineMode}
+                  activeFormula={aiFormula}
+                  currentAlgorithm={aiAlgorithm}
+                  methodStats={methodStats}
+                  isAutoBetActive={isAutoBotActive}
+                  onApplyFormula={handleApplyAiFormula}
+                  onSelectAlgorithm={(algo) => {
+                    setBettingEngineMode('METHODS_7_MODE');
+                    setAiAlgorithm(algo);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 4. 6-LOSS SNIPER WAIT & STRIKE ENGINE TITLE BAR */}
+          <div className="rounded-xl border border-rose-500/30 bg-slate-900/90 shadow-md overflow-hidden transition-all">
+            <button
+              type="button"
+              onClick={() => toggleDashboard('sniper')}
+              className="w-full p-3 sm:px-4 sm:py-3 flex items-center justify-between gap-3 text-left hover:bg-slate-855 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/40 shrink-0">
+                  <Crosshair className="w-4 h-4 animate-pulse" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-tech text-xs sm:text-sm font-bold text-white tracking-wide">
+                      🎯 5-LOSS / 6-LOSS SNIPER WAIT & STRIKE ENGINE
+                    </span>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border ${
+                      bettingEngineMode === 'SNIPER_5LOSS_MODE' || bettingEngineMode === 'SNIPER_6LOSS_MODE'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 ring-1 ring-rose-400/50'
+                        : scatterAlarmEvent
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30 animate-pulse'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}>
+                      {bettingEngineMode === 'SNIPER_5LOSS_MODE'
+                        ? '🎯 5-LOSS SNIPER ACTIVE'
+                        : bettingEngineMode === 'SNIPER_6LOSS_MODE'
+                        ? '🎯 6-LOSS SNIPER ACTIVE'
+                        : scatterAlarmEvent?.level === 'FOUND_3_LOSS'
+                        ? `🚨 3-LOSS ALARM (${scatterAlarmEvent.consecutiveLosses}/5)`
+                        : scatterAlarmEvent?.level === 'LOCKED_5'
+                        ? `🎯 5-LOSS LOCKED (100% READY)`
+                        : scatterAlarmEvent
+                        ? `🚨 SCATTER ALARM (${scatterAlarmEvent.consecutiveLosses}/6)`
+                        : 'SCANNING FOR 5-LOSS METHODS'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                    Method ၇ မျိုးထဲမှ ၅ ကြိမ်ရှုံးသော Method အား Win ဖြစ်မချင်း တမျိုးတည်း သီးသန့်လောင်း၍ Win လျှင်ရပ်ပြီး ပြန်စောင့်သော စနစ် (၃ ကြိမ်ရှုံး Voice Alarm ပါဝင်သည်)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[11px] font-mono text-rose-400 font-bold hidden md:inline">
+                  {expandedDashboards.sniper ? 'အသေးစိတ် ပြန်ပိတ်မည်' : 'အသေးစိတ် ဖွင့်ကြည့်မည်'}
+                </span>
+                <div className="p-1 rounded-lg bg-slate-800 text-slate-400">
+                  {expandedDashboards.sniper ? <ChevronUp className="w-4 h-4 text-rose-400" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+              </div>
+            </button>
+
+            {expandedDashboards.sniper && (
+              <div className="p-3 sm:p-4 border-t border-slate-800/80 bg-slate-950/60 animate-in fade-in">
+                <Sniper6LossPanel
+                  stats={methodStats}
+                  currentMode={bettingEngineMode}
+                  onSelectMode={setBettingEngineMode}
+                  isAutoBetActive={isAutoBotActive}
+                  onActivateSniperAutoBet={handleActivateSniper}
+                  activeScatterAlarm={scatterAlarmEvent}
+                  onDismissScatterAlarm={() => setScatterAlarmEvent(null)}
+                  sniperLockedAlgo={sniperLockedAlgo}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 4. SHWELOTTERY GATEWAY & SESSION STATUS TITLE BAR */}
+          <div className="rounded-xl border border-emerald-500/30 bg-slate-900/90 shadow-md overflow-hidden transition-all">
+            <button
+              type="button"
+              onClick={() => toggleDashboard('gateway')}
+              className="w-full p-3 sm:px-4 sm:py-3 flex items-center justify-between gap-3 text-left hover:bg-slate-855 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shrink-0">
+                  <Globe className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-tech text-xs sm:text-sm font-bold text-white tracking-wide">
+                      🔗 OFFICIAL SHWELOTTERY GATEWAY & CONNECTION STATUS
+                    </span>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border ${
+                      account.isConnected
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                    }`}>
+                      {account.isConnected ? '🟢 CONNECTED' : '🔴 DISCONNECTED'} • {account.latencyMs}ms
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                    Official ShweLottery API Session၊ အကောင့်လက်ကျန်ငွေ၊ User ID နှင့် ဆာဗာ Ping အခြေအနေ (နှိပ်၍ အသေးစိတ် ကြည့်ရှုနိုင်ပါသည်)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[11px] font-mono text-emerald-400 font-bold hidden md:inline">
+                  {expandedDashboards.gateway ? 'အသေးစိတ် ပြန်ပိတ်မည်' : 'အသေးစိတ် ဖွင့်ကြည့်မည်'}
+                </span>
+                <div className="p-1 rounded-lg bg-slate-800 text-slate-400">
+                  {expandedDashboards.gateway ? <ChevronUp className="w-4 h-4 text-emerald-400" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+              </div>
+            </button>
+
+            {expandedDashboards.gateway && (
+              <div className="p-3 sm:p-4 border-t border-slate-800/80 bg-slate-950/60 animate-in fade-in">
+                <ShweLotteryStatus
+                  account={account}
+                  onRefreshLogin={handleRefreshLogin}
+                  isSyncing={isSyncing}
+                />
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* TAB 1: INTERACTIVE PLAY STATION (USER CAN PLAY WHILE PREDATOR FLOATS) */}
         {activeTab === 'PLAY' && (
